@@ -1,0 +1,24 @@
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets - only .env.example is committed
+.env
+.env.*
+!.env.example
+.e2e-credentials.json
+# Generated SQL setup contains starting passwords
+supabase/setup/
+# Generated from the staff CSV: personal emails and starting passwords
+DEMO-LOGINS.md
+supabase/demo/seed.sql
+
+# Demo mode: PGlite browser build copied by scripts/demo.mjs
+public/pglite/
+
+supabase/.temp/
+supabase/.branches/
+.DS_Store

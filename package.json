@@ -1,0 +1,54 @@
+{
+  "name": "diwakar-connect",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Diwakar Connect - company communications platform for Diwakar Solar",
+  "scripts": {
+    "dev": "next dev",
+    "demo": "node scripts/demo.mjs",
+    "demo:serve": "node scripts/demo.mjs --prod",
+    "build": "next build",
+    "start": "next start",
+    "serve": "next build && next start -p 3000",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test:db": "node scripts/test-db.mjs",
+    "e2e:staging": "node --env-file=.env.local scripts/e2e-staging.mjs",
+    "db:push:staging": "node --env-file=.env.local scripts/db-push.mjs",
+    "supabase:import": "node --env-file=.env.local scripts/supabase-import.mjs",
+    "setup:env": "node scripts/setup-env.mjs",
+    "setup:livekit": "node scripts/setup-livekit.mjs",
+    "db:types": "npx supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
+    "check": "npm run typecheck && npm run lint && npm run test:db && npm run build"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "clsx": "^2.1.1",
+    "livekit-client": "^2.23.0",
+    "livekit-server-sdk": "^2.19.1",
+    "lucide-react": "^1.61.0",
+    "next": "^15.5.28",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.6.1",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.28",
+    "pg": "^8.23.1",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
+}

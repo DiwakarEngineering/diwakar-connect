@@ -1,0 +1,56 @@
+# Local development settings for the Supabase CLI (`npx supabase start`).
+# Hosted projects are configured in the dashboard - see README "Supabase project setup".
+
+project_id = "diwakar-connect"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+# seed.sql runs only on `supabase db reset` against the LOCAL database.
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://localhost:3000/auth/confirm"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# No public self-registration: people are invited by administrators.
+enable_signup = false
+minimum_password_length = 10
+password_requirements = "letters_digits"
+
+[auth.rate_limit]
+email_sent = 30
+
+[auth.email]
+enable_signup = false
+enable_confirmations = true
+double_confirm_changes = true
+secure_password_change = true
+
+[auth.email.template.invite]
+subject = "You're invited to Diwakar Connect"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Diwakar Connect password"
+content_path = "./supabase/templates/recovery.html"
