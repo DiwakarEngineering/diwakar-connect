@@ -277,11 +277,11 @@ In Cloudflare: **Workers & Pages → Create → Import a repository** → pick t
 | Setting | Value |
 | --- | --- |
 | Project name | `diwakar-connect` (must match `name` in `wrangler.jsonc`) |
-| Build command | leave empty (or `npm run build`; it is not needed) |
+| Build command | `npm run build` (or `npx opennextjs-cloudflare build`, which skips one redundant Next.js build) |
 | Deploy command | `npx wrangler deploy` |
 | Non-production branch deploy command | `npx wrangler versions upload` |
 
-`wrangler.jsonc` sets `build.command` to `npx opennextjs-cloudflare build`, so every `wrangler deploy` / `versions upload` / `dev` builds the Worker first.
+`wrangler deploy` hands off to `opennextjs-cloudflare deploy`, which needs the OpenNext bundle in `.open-next/`. On Cloudflare's build machines (`WORKERS_CI` is set) the `postbuild` hook (`scripts/cf-postbuild.mjs`) creates it after `npm run build`; locally and on other CI the hook does nothing.
 
 Under **Advanced settings → Build variables**, add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL` (they are compiled into the browser bundle at build time).
 After the first deploy, under **Worker → Settings → Variables and Secrets**, add the runtime secrets `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (and optionally `LOG_LEVEL`).
