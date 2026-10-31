@@ -10,6 +10,9 @@
     "build": "next build",
     "start": "next start",
     "serve": "next build && next start -p 3000",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test:db": "node scripts/test-db.mjs",
@@ -40,6 +43,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.11",
     "@eslint/eslintrc": "^3.3.7",
+    "@opennextjs/cloudflare": "^1.20.15",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -49,6 +53,7 @@
     "pg": "^8.23.1",
     "postcss": "^8.5.31",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.156.0"
   }
 }

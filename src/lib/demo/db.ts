@@ -39,7 +39,8 @@ async function init(): Promise<DemoDb> {
   if (!res.ok) throw new Error("Demo schema unavailable. Start the app with `npm run demo`.");
   const { version, parts } = (await res.json()) as { version: string; parts: string[] };
 
-  const moduleUrl = "/pglite/index.js";
+  // Built at runtime (browser only) so server bundlers don't try to resolve it.
+  const moduleUrl = `${window.location.origin}/pglite/index.js`;
   const mod = (await import(/* webpackIgnore: true */ moduleUrl)) as { PGlite: PGliteCtor };
   const db = new mod.PGlite(`idb://${DB_PREFIX}-${version}`, { parsers: PARSERS });
   await db.waitReady;

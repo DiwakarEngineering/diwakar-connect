@@ -268,6 +268,25 @@ Any Node.js host that runs Next.js works (Vercel, Netlify, a container).
 3. Add the production URL to Supabase Auth Site URL / Redirect URLs and (if used) the LiveKit webhook.
 4. Serve over HTTPS - browsers only allow camera/microphone on secure origins.
 
+### Cloudflare Workers (GitHub auto-deploy)
+
+The repo includes the OpenNext adapter (`@opennextjs/cloudflare`), `wrangler.jsonc` and `open-next.config.ts`.
+
+In Cloudflare: **Workers & Pages → Create → Import a repository** → pick this repo, then:
+
+| Setting | Value |
+| --- | --- |
+| Project name | `diwakar-connect` (must match `name` in `wrangler.jsonc`) |
+| Build command | `npx opennextjs-cloudflare build` |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch deploy command | `npx wrangler versions upload` |
+
+Under **Advanced settings → Build variables**, add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL` (they are compiled into the browser bundle at build time).
+After the first deploy, under **Worker → Settings → Variables and Secrets**, add the runtime secrets `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (and optionally `LOG_LEVEL`).
+Then add the `*.workers.dev` URL (or your custom domain) to Supabase Auth → URL Configuration.
+
+Manual deploy from your machine: `npx wrangler login`, then `npm run cf:deploy`. Local Workers preview: `npm run cf:preview`.
+
 Security headers (`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, and a `Permissions-Policy` limiting camera/mic/screen to this origin) are set in `next.config.ts`.
 
 ---

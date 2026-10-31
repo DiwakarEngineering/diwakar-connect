@@ -22,3 +22,8 @@ public/pglite/
 supabase/.temp/
 supabase/.branches/
 .DS_Store
+
+# Cloudflare (OpenNext) build output and local secrets
+.open-next/
+.wrangler/
+.dev.vars*
