@@ -16,7 +16,9 @@
       "service": "diwakar-connect"
     }
   ],
-  "observability": { "enabled": true }
-  // Runtime secrets (SUPABASE_SERVICE_ROLE_KEY, LIVEKIT_*) are set in the
-  // Cloudflare dashboard (Worker -> Settings -> Variables and Secrets), never here.
+  "observability": { "enabled": true },
+  // All variables and secrets (Supabase, LiveKit) are set in the Cloudflare
+  // dashboard (Worker -> Settings -> Variables and Secrets), never here.
+  // Without this, every `wrangler deploy` deletes dashboard text variables.
+  "keep_vars": true
 }
