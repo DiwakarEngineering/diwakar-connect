@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { connection } from "next/server";
 import { ToastProvider } from "@/components/ui/toast";
+import { getPublicEnv, PUBLIC_ENV_META } from "@/lib/env";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
@@ -17,9 +19,17 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Render per request so runtime-only NEXT_PUBLIC_* values (e.g. Cloudflare
+  // Worker variables) reach the browser via the meta tag below.
+  await connection();
+  const publicEnv = getPublicEnv();
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* Public values only (URL, publishable/anon key, site URL). */}
+        {publicEnv && <meta name={PUBLIC_ENV_META} content={JSON.stringify(publicEnv)} />}
+      </head>
       <body className="min-h-dvh font-sans">
         <a
           href="#main"

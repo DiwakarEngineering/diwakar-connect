@@ -283,8 +283,7 @@ In Cloudflare: **Workers & Pages → Create → Import a repository** → pick t
 
 `wrangler deploy` hands off to `opennextjs-cloudflare deploy`, which needs the OpenNext bundle in `.open-next/`. On Cloudflare's build machines (`WORKERS_CI` is set) the `postbuild` hook (`scripts/cf-postbuild.mjs`) creates it after `npm run build`; locally and on other CI the hook does nothing.
 
-Under **Advanced settings → Build variables**, add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL` (they are compiled into the browser bundle at build time).
-After the first deploy, under **Worker → Settings → Variables and Secrets**, add the runtime secrets `SUPABASE_SERVICE_ROLE_KEY`, `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (and optionally `LOG_LEVEL`).
+Under **Worker → Settings → Variables and Secrets**, add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL` (Text) and `SUPABASE_SERVICE_ROLE_KEY` (Secret), plus `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` for calls. The `NEXT_PUBLIC_*` values are read at runtime (the root layout passes them to the browser in a `<meta>` tag), so no rebuild is needed; setting them as build variables also works.
 Then add the `*.workers.dev` URL (or your custom domain) to Supabase Auth → URL Configuration.
 
 Manual deploy from your machine: `npx wrangler login`, then `npm run cf:deploy`. Local Workers preview: `npm run cf:preview` (put local secrets in `.dev.vars`).
