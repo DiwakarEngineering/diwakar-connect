@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handler, requireActiveUser } from "@/lib/api";
-import { getLiveKitConfig } from "@/lib/env.server";
+import { getLiveKitConfig, missingLiveKitVars } from "@/lib/env.server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +12,11 @@ export const GET = handler("calls.config", async (request: Request) => {
     .select("calls_enabled")
     .eq("id", true)
     .maybeSingle();
+  const providerConfigured = getLiveKitConfig() !== null;
   return NextResponse.json({
-    providerConfigured: getLiveKitConfig() !== null,
+    providerConfigured,
     enabledByOrganization: settings?.calls_enabled ?? true,
+    // Setting names only (never values), to make deployment problems obvious.
+    ...(providerConfigured ? {} : { missing: missingLiveKitVars() }),
   });
 });
