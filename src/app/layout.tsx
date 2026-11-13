@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { connection } from "next/server";
+import { ServiceWorkerRegistration } from "@/components/providers/service-worker";
 import { ToastProvider } from "@/components/ui/toast";
 import { getPublicEnv, PUBLIC_ENV_META } from "@/lib/env";
 
@@ -11,6 +12,9 @@ export const metadata: Metadata = {
   title: { default: "Diwakar Connect", template: "%s · Diwakar Connect" },
   description: "Chat, teams and calls for Diwakar Solar employees.",
   robots: { index: false, follow: false },
+  applicationName: "Diwakar Connect",
+  appleWebApp: { capable: true, title: "Diwakar Connect", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -38,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to main content
         </a>
         <ToastProvider>{children}</ToastProvider>
+        <ServiceWorkerRegistration />
       </body>
     </html>
   );

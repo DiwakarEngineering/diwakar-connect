@@ -288,6 +288,10 @@ Then add the `*.workers.dev` URL (or your custom domain) to Supabase Auth → UR
 
 Manual deploy from your machine: `npx wrangler login`, then `npm run cf:deploy`. Local Workers preview: `npm run cf:preview` (put local secrets in `.dev.vars`).
 
+### Android app (Google Play)
+
+The site is installable (web app manifest, icons, offline page) and can be published on Google Play as a Trusted Web Activity; see [docs/ANDROID.md](docs/ANDROID.md) for the step-by-step guide.
+
 Security headers (`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, and a `Permissions-Policy` limiting camera/mic/screen to this origin) are set in `next.config.ts`.
 
 ---
