@@ -101,3 +101,34 @@ Anything without its credentials shows a clear "not configured" state — never 
 - Multi-account browser tests with Playwright: two or more signed-in employees in separate
   browser contexts, Chromium's fake camera/microphone for real LiveKit media.
 - These need a **staging** Supabase project and LiveKit keys available to the test runner.
+
+## 5. Progress
+
+### Phase 1 — Chat and presence (first delivery)
+
+Migration: `supabase/migrations/20261117000100_chat_workspace.sql` (additive). **Apply it to the
+Supabase project before deploying the app**: the new screens call its functions, and the current
+app keeps working once it is applied.
+
+Delivered and tested (database checks in `npm run test:db`; browser walk-through in demo mode
+with separate employee accounts):
+
+- Chat list: Unread / Chats / Channels filters, Mentions view, Favorites and Recent sections,
+  team channels listed with team names, favourite / pin / mute / mark-as-read per conversation.
+- New chat (`/chat/new`): "To:" search across employees (photo, presence, title, department),
+  existing group chats, team channels and departments (adds the department's active members);
+  reuses an existing direct chat, or a group with exactly the same members, instead of duplicating.
+- Header: favourite, add people (from a 1:1 chat to a group, de-duplicated), shared files,
+  pinned messages, audio/video call, search, members, more options.
+- Messages: forward (files are copied into the target conversation's storage, so its access rules
+  apply), pin for everyone (live), built-in Diwakar sticker set, voice messages (up to 5 minutes,
+  recorded in the browser, stored as attachments), sent / delivered / read ticks, PDF / image /
+  audio / video preview in the browser.
+- Presence: "In a call" shown automatically while connected to a call (clears on leave or close);
+  Do not disturb takes priority.
+- Notifications: sound for new direct/group messages and mentions (per-device switch in Settings),
+  desktop alert for new messages while the tab is in the background; muted chats and
+  Do not disturb stay silent.
+
+Still to do in Phase 1: GIFs (needs a GIF provider key), Word/Excel/PowerPoint previews (needs a
+conversion service), dark theme.

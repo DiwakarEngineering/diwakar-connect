@@ -241,6 +241,9 @@ export function useMessages(conversationId: string, clearedAt: string | null = n
               edited_at: m.edited_at,
               deleted_at: m.deleted_at,
               deleted_by: m.deleted_by,
+              pinned_at: m.pinned_at ?? null,
+              pinned_by: m.pinned_by ?? null,
+              sticker: m.sticker ?? null,
             });
             const next = { ...s, messages };
             if (m.deleted_at && !prev.deleted_at) {
@@ -313,6 +316,10 @@ export function useMessages(conversationId: string, clearedAt: string | null = n
         edited_at: null,
         deleted_at: null,
         deleted_by: null,
+        pinned_at: null,
+        pinned_by: null,
+        forwarded_from_id: null,
+        sticker: input.sticker ?? null,
         pending: true,
       };
       const adjustReplyCount = (delta: number) => {
@@ -354,6 +361,7 @@ export function useMessages(conversationId: string, clearedAt: string | null = n
           body: input.body,
           reply_to_id: input.replyToId,
           mentions: input.mentions,
+          sticker: input.sticker ?? null,
         });
         if (insertError) throw new Error(friendlyError(insertError, "Message not sent."));
         messageCreated = true;
@@ -480,6 +488,21 @@ export function useMessages(conversationId: string, clearedAt: string | null = n
     [me, supabase],
   );
 
+  const setPinned = useCallback(
+    async (id: string, pinned: boolean) => {
+      const prev = storeRef.current.messages.get(id);
+      if (!prev) return;
+      const optimistic = { ...prev, pinned_at: pinned ? new Date().toISOString() : null, pinned_by: pinned ? me : null };
+      setStore((s) => ({ ...s, messages: new Map(s.messages).set(id, optimistic) }));
+      const { error: pinError } = await supabase.rpc("pin_message", { p_message_id: id, p_pinned: pinned });
+      if (pinError) {
+        setStore((s) => ({ ...s, messages: new Map(s.messages).set(id, prev) }));
+        throw new Error(friendlyError(pinError, pinned ? "Couldn't pin the message." : "Couldn't unpin the message."));
+      }
+    },
+    [me, supabase],
+  );
+
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string) => {
       const list = storeRef.current.reactions.get(messageId) ?? [];
@@ -513,6 +536,7 @@ export function useMessages(conversationId: string, clearedAt: string | null = n
     discardFailed,
     edit,
     remove,
+    setPinned,
     toggleReaction,
   };
 }

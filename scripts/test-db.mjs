@@ -693,6 +693,103 @@ async function main() {
     );
   });
 
+  console.log("\nChat workspace (favourites, receipts, pins, forwards, stickers)");
+
+  await check("favourites are per person", async () => {
+    await as(alice, ({ q }) => q("select public.set_conversation_preferences($1, p_is_favorite => true)", [dm]));
+    const a = await as(alice, ({ one }) => one("select is_favorite from public.list_my_conversations() where conversation_id = $1", [dm]));
+    const b = await as(bob, ({ one }) => one("select is_favorite from public.list_my_conversations() where conversation_id = $1", [dm]));
+    assert(a?.is_favorite === true, "alice's favourite not saved");
+    assert(b?.is_favorite === false, "favourite leaked to bob");
+  });
+
+  await check("delivered receipts are recorded and visible only to members", async () => {
+    await as(bob, ({ q }) => q("select public.mark_conversations_delivered()"));
+    const r = await as(alice, ({ q }) => q("select user_id, last_delivered_at from public.get_message_receipts($1)", [dm]));
+    assert(r.length === 1 && r[0].user_id === bob && r[0].last_delivered_at, "bob's delivery not visible to alice");
+    const out = await as(mallory, ({ q }) => q("select * from public.get_message_receipts($1)", [dm]));
+    assert(out.length === 0, "outsider saw receipts");
+  });
+
+  await check("members pin and unpin messages; outsiders and direct updates cannot", async () => {
+    await as(bob, ({ q }) => q("select public.pin_message($1, true)", [msg1]));
+    let m = await as(alice, ({ one }) => one("select pinned_at, pinned_by from public.messages where id = $1", [msg1]));
+    assert(m.pinned_at && m.pinned_by === bob, "pin not recorded");
+    await expectError(as(mallory, ({ q }) => q("select public.pin_message($1, false)", [msg1])), /not found/);
+    await expectError(
+      as(alice, ({ q }) => q("update public.messages set pinned_at = null where id = $1", [msg1])),
+      /pin_message/,
+    );
+    await as(alice, ({ q }) => q("select public.pin_message($1, false)", [msg1]));
+    m = await as(alice, ({ one }) => one("select pinned_at from public.messages where id = $1", [msg1]));
+    assert(m.pinned_at === null, "unpin failed");
+  });
+
+  await check("forwards must point at a message the sender can see", async () => {
+    const self = (await as(alice, ({ one }) => one("select public.get_or_create_direct_conversation($1) as id", [admin]))).id;
+    await as(alice, ({ q }) =>
+      q("insert into public.messages (conversation_id, sender_id, body, forwarded_from_id) values ($1, $2, 'Hello Bob', $3)", [
+        self,
+        alice,
+        msg1,
+      ]),
+    );
+    const mal = (await as(mallory, ({ one }) => one("select public.get_or_create_direct_conversation($1) as id", [admin]))).id;
+    await expectError(
+      as(mallory, ({ q }) =>
+        q("insert into public.messages (conversation_id, sender_id, body, forwarded_from_id) values ($1, $2, 'stolen', $3)", [
+          mal,
+          mallory,
+          msg1,
+        ]),
+      ),
+      /only forward messages you can see/,
+    );
+  });
+
+  await check("stickers are validated and cannot be swapped by editing", async () => {
+    const s = await as(alice, ({ one }) =>
+      one("insert into public.messages (conversation_id, sender_id, body, sticker) values ($1, $2, '', 'thumbs-up') returning id", [
+        dm,
+        alice,
+      ]),
+    );
+    await expectError(
+      as(alice, ({ q }) => q("insert into public.messages (conversation_id, sender_id, body, sticker) values ($1, $2, '', 'Bad Sticker!')", [dm, alice])),
+      /messages_sticker_format/,
+    );
+    await expectError(
+      as(alice, ({ q }) => q("update public.messages set sticker = 'party' where id = $1", [s.id])),
+      /Only the message text/,
+    );
+    const row = await as(bob, ({ one }) => one("select last_message_preview from public.list_my_conversations() where conversation_id = $1", [dm]));
+    assert(row.last_message_preview === "Sent a sticker", `preview was ${row.last_message_preview}`);
+  });
+
+  await check("existing group chats are found instead of duplicated", async () => {
+    const g = (await as(alice, ({ one }) => one("select public.create_group_conversation($1, 'Dedup') as id", [[bob, manager]]))).id;
+    const same = await as(bob, ({ one }) => one("select public.find_group_conversation($1) as id", [[alice, manager]]));
+    assert(same.id === g, "existing group not found for the same member set");
+    const different = await as(bob, ({ one }) => one("select public.find_group_conversation($1) as id", [[alice]]));
+    assert(different.id !== g, "returned a group with different members");
+    const outsider = await as(mallory, ({ one }) => one("select public.find_group_conversation($1) as id", [[alice, bob]]));
+    assert(outsider.id !== g, "outsider found someone else's group");
+  });
+
+  await check("chat list includes my team channels but not other teams' channels", async () => {
+    const t = randomUUID();
+    await as(manager, ({ q }) => q("insert into public.teams (id, name, created_by) values ($1, 'Procurement', $2)", [t, manager]));
+    await as(manager, ({ q }) => q("insert into public.team_members (team_id, user_id) values ($1, $2)", [t, alice]));
+    const conv = (await rows("select c.id from public.conversations c join public.channels ch on ch.id = c.channel_id where ch.team_id = $1", [t]))[0].id;
+    await as(manager, ({ q }) => q("insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'PO approved')", [conv, manager]));
+    const a = await as(alice, ({ one }) =>
+      one("select kind, title, team_name, unread_count from public.list_my_conversations(p_search => 'procurement') where conversation_id = $1", [conv]),
+    );
+    assert(a?.kind === "channel" && a.team_name === "Procurement" && a.unread_count === 1, `alice row: ${JSON.stringify(a)}`);
+    const m = await as(mallory, ({ q }) => q("select 1 from public.list_my_conversations() where conversation_id = $1", [conv]));
+    assert(m.length === 0, "channel listed for a non-member");
+  });
+
   console.log(`\n${passed} passed, ${failures.length} failed`);
   if (failures.length > 0) {
     process.exitCode = 1;

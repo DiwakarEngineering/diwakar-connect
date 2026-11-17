@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { ArrowLeft, BellOff, Eraser, Hash, Lock, MoreVertical, Phone, Pin, PinOff, Search, Users, Video, Bell, Pencil, Settings2 } from "lucide-react";
+import { ArrowLeft, BellOff, Eraser, FolderOpen, Hash, Lock, MoreVertical, Phone, Pin, PinOff, Search, Star, StarOff, UserPlus, Users, Video, Bell, Pencil, Settings2 } from "lucide-react";
 import type { Person } from "@/components/providers/people-provider";
 import { Avatar, usePresenceState } from "@/components/ui/avatar";
 import { Menu, type MenuItem } from "@/components/ui/menu";
@@ -16,8 +16,10 @@ type Props = {
   activePanel: string | null;
   callsAvailable: boolean;
   activeCall: boolean;
-  onTogglePanel: (panel: "members" | "search") => void;
+  onTogglePanel: (panel: "members" | "search" | "files" | "pinned") => void;
   onTogglePin: () => void;
+  onToggleFavorite: () => void;
+  onAddPeople?: () => void;
   onToggleMute: () => void;
   onRename: () => void;
   onClearHistory: () => void;
@@ -32,6 +34,8 @@ export function ConversationHeader({
   activeCall,
   onTogglePanel,
   onTogglePin,
+  onToggleFavorite,
+  onAddPeople,
   onToggleMute,
   onRename,
   onClearHistory,
@@ -49,6 +53,9 @@ export function ConversationHeader({
   }
 
   const menu: MenuItem[] = [
+    meta.isFavorite
+      ? { label: "Remove from favorites", icon: <StarOff className="h-4 w-4" />, onSelect: onToggleFavorite }
+      : { label: "Add to favorites", icon: <Star className="h-4 w-4" />, onSelect: onToggleFavorite },
     meta.isPinned
       ? { label: "Unpin", icon: <PinOff className="h-4 w-4" />, onSelect: onTogglePin }
       : { label: "Pin to top", icon: <Pin className="h-4 w-4" />, onSelect: onTogglePin },
@@ -56,6 +63,9 @@ export function ConversationHeader({
       ? { label: "Unmute", icon: <Bell className="h-4 w-4" />, onSelect: onToggleMute }
       : { label: "Mute", icon: <BellOff className="h-4 w-4" />, onSelect: onToggleMute },
   ];
+  if (onAddPeople) menu.push({ label: "Add people", icon: <UserPlus className="h-4 w-4" />, onSelect: onAddPeople });
+  menu.push({ label: "Pinned messages", icon: <Pin className="h-4 w-4" />, onSelect: () => onTogglePanel("pinned") });
+  menu.push({ label: "Shared files", icon: <FolderOpen className="h-4 w-4" />, onSelect: () => onTogglePanel("files") });
   if (meta.kind === "group") menu.push({ label: "Rename group", icon: <Pencil className="h-4 w-4" />, onSelect: onRename });
   if (meta.kind === "channel" && meta.team && meta.canManage) {
     const teamId = meta.team.id;
@@ -84,7 +94,10 @@ export function ConversationHeader({
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[15px] font-semibold text-ink-900">{meta.title}</h1>
+        <h1 className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-ink-900">
+          <span className="truncate">{meta.title}</span>
+          {meta.isFavorite ? <Star className="h-3.5 w-3.5 shrink-0 fill-brand-500 text-brand-500" aria-label="Favorite" /> : null}
+        </h1>
         {subtitle ? <p className="truncate text-xs text-ink-500">{subtitle}</p> : null}
       </div>
 
@@ -118,6 +131,21 @@ export function ConversationHeader({
             </Link>
           </>
         )}
+        {onAddPeople ? (
+          <button type="button" onClick={onAddPeople} className={clsx(iconBtn, "hidden sm:flex")} aria-label="Add people" title="Add people">
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onTogglePanel("files")}
+          className={clsx(iconBtn, "hidden sm:flex", activePanel === "files" && "bg-brand-50 text-brand-700")}
+          aria-label="Shared files"
+          title="Shared files"
+          aria-pressed={activePanel === "files"}
+        >
+          <FolderOpen className="h-4 w-4" aria-hidden="true" />
+        </button>
         <button
           type="button"
           onClick={() => onTogglePanel("search")}

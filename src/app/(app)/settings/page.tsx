@@ -18,6 +18,7 @@ import { NewPasswordFields, validateNewPassword, type PasswordErrors } from "@/c
 import { useSession } from "@/components/providers/session-provider";
 import { usePeople } from "@/components/providers/people-provider";
 import { BROWSER_NOTIFICATIONS_KEY } from "@/components/providers/activity-provider";
+import { playChime, setSoundsEnabled, soundsEnabled } from "@/lib/sounds";
 import { useSetAvailability } from "@/components/shell/profile-panel";
 import { StatusMessageDialog } from "@/components/shell/status-message-dialog";
 
@@ -276,6 +277,8 @@ function NotificationsSection() {
   const supabase = getSupabaseBrowserClient();
   const [prefs, setPrefs] = useState<Tables<"notification_preferences"> | null>(null);
   const [browser, setBrowser] = useState<"unsupported" | "denied" | "off" | "on">("off");
+  const [sounds, setSounds] = useState(true);
+  useEffect(() => setSounds(soundsEnabled()), []);
 
   useEffect(() => {
     void supabase
@@ -352,6 +355,16 @@ function NotificationsSection() {
             checked={browser === "on"}
             disabled={browser === "unsupported" || browser === "denied"}
             onChange={(v) => void toggleBrowser(v)}
+          />
+          <Switch
+            label="Notification sounds"
+            description="Play a short sound for new messages and mentions on this device. Muted chats and Do not disturb stay silent."
+            checked={sounds}
+            onChange={(v) => {
+              setSoundsEnabled(v);
+              setSounds(v);
+              if (v) playChime("message");
+            }}
           />
         </div>
       )}

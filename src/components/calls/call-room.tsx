@@ -36,6 +36,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field, Select } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
+import { usePresence } from "@/components/providers/presence-provider";
 import { PeoplePicker, type PickedPerson } from "@/components/people-picker";
 import { useSession } from "@/components/providers/session-provider";
 import { usePeopleById } from "@/components/providers/people-provider";
@@ -98,6 +99,13 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const meta = metaState.status === "ready" ? metaState.meta : null;
 
   const [phase, setPhase] = useState<Phase>({ kind: "lobby" });
+  const { setMyActivity } = usePresence();
+  const inCall = phase.kind === "connected" || phase.kind === "reconnecting";
+  // Everyone sees "In a call" while this device is connected (cleared on leave, close or disconnect).
+  useEffect(() => {
+    setMyActivity(inCall ? "call" : null);
+    return () => setMyActivity(null);
+  }, [inCall, setMyActivity]);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(initialMedia === "video");
   const [preview, setPreview] = useState<LocalVideoTrack | null>(null);

@@ -11,7 +11,7 @@ export type Reaction = Tables<"message_reactions">;
 export type Attachment = Tables<"attachments">;
 
 export const MESSAGE_COLUMNS =
-  "id, conversation_id, sender_id, kind, body, reply_to_id, mentions, created_at, edited_at, deleted_at, deleted_by";
+  "id, conversation_id, sender_id, kind, body, reply_to_id, mentions, created_at, edited_at, deleted_at, deleted_by, pinned_at, pinned_by, forwarded_from_id, sticker";
 
 export type ConversationMeta = {
   id: string;
@@ -25,6 +25,7 @@ export type ConversationMeta = {
   canManage: boolean;
   isPinned: boolean;
   isMuted: boolean;
+  isFavorite: boolean;
   /** Messages up to this time are hidden for me ("Clear chat history"). */
   clearedAt: string | null;
   channel: Tables<"channels"> | null;
@@ -37,4 +38,6 @@ export type SendInput = {
   mentions: string[];
   replyToId: string | null;
   files: File[];
+  /** One sticker from the built-in set (see stickers.tsx). */
+  sticker?: string | null;
 };

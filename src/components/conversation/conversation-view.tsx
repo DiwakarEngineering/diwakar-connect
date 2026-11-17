@@ -23,9 +23,20 @@ import { Composer } from "./composer";
 import { ThreadPanel } from "./thread-panel";
 import { MembersPanel } from "./members-panel";
 import { SearchPanel } from "./search-panel";
+import { FilesPanel } from "./files-panel";
+import { PinnedPanel } from "./pinned-panel";
+import { ForwardDialog } from "./forward-dialog";
+import { AddPeopleDialog } from "./add-people-dialog";
 import type { ConversationMeta, Message } from "./types";
 
-type Panel = { type: "thread"; rootId: string } | { type: "members" } | { type: "search" } | null;
+type Panel =
+  | { type: "thread"; rootId: string }
+  | { type: "members" }
+  | { type: "search" }
+  | { type: "files" }
+  | { type: "pinned" }
+  | null;
+type Receipt = { read: string | null; delivered: string | null };
 
 /** A full conversation (direct, group or channel): header, history, composer and side panels. */
 export function ConversationView({ conversationId, backHref }: { conversationId: string; backHref: string }) {
@@ -75,7 +86,9 @@ function ReadyConversation({
   const [clearing, setClearing] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(meta.groupTitle ?? "");
-  const [receipts, setReceipts] = useState<Map<string, string>>(new Map());
+  const [receipts, setReceipts] = useState<Map<string, Receipt>>(new Map());
+  const [forwarding, setForwarding] = useState<Message | null>(null);
+  const [addPeopleOpen, setAddPeopleOpen] = useState(false);
   const supabase = getSupabaseBrowserClient();
 
   const senderIds = useMemo(() => {
@@ -109,12 +122,14 @@ function ReadyConversation({
   // "Seen" markers for direct and group chats.
   const loadReceipts = useCallback(async () => {
     if (meta.kind === "channel") return;
-    const { data } = await supabase.rpc("get_read_receipts", { p_conversation_id: meta.id });
-    setReceipts(new Map((data ?? []).map((r) => [r.user_id, r.last_read_at])));
+    const { data } = await supabase.rpc("get_message_receipts", { p_conversation_id: meta.id });
+    setReceipts(new Map((data ?? []).map((r) => [r.user_id, { read: r.last_read_at, delivered: r.last_delivered_at }])));
   }, [meta.id, meta.kind, supabase]);
   useEffect(() => {
     void loadReceipts();
-    const id = window.setInterval(() => void loadReceipts(), 20_000);
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadReceipts();
+    }, 8_000);
     return () => window.clearInterval(id);
   }, [loadReceipts, lastId]);
 
@@ -130,7 +145,7 @@ function ReadyConversation({
     (m: Message) => {
       if (m.id !== lastOwnId || meta.kind === "channel") return null;
       const readers = Array.from(receipts.entries())
-        .filter(([, at]) => at >= m.created_at)
+        .filter(([, r]) => !!r.read && r.read >= m.created_at)
         .map(([uid]) => uid);
       if (readers.length === 0) return null;
       if (meta.kind === "direct") return "Seen";
@@ -138,6 +153,26 @@ function ReadyConversation({
       return `Seen by ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}`;
     },
     [lastOwnId, meta.kind, people, receipts],
+  );
+
+  // Sent / delivered / read: "read" once every other member has read it,
+  // "delivered" once every other member's device has received it.
+  const otherMemberIds = useMemo(() => meta.memberIds.filter((id) => id !== me), [me, meta.memberIds]);
+  const receiptFor = useCallback(
+    (m: Message): "sent" | "delivered" | "read" | null => {
+      if (meta.kind === "channel" || m.sender_id !== me || m.kind !== "user" || m.pending || m.failed) return null;
+      if (otherMemberIds.length === 0) return "read";
+      const all = (pick: (r: Receipt) => string | null) =>
+        otherMemberIds.every((uid) => {
+          const r = receipts.get(uid);
+          const at = r ? pick(r) : null;
+          return !!at && at >= m.created_at;
+        });
+      if (all((r) => r.read)) return "read";
+      if (all((r) => r.delivered)) return "delivered";
+      return "sent";
+    },
+    [me, meta.kind, otherMemberIds, receipts],
   );
 
   // --- Permissions (mirrors database rules; the database is authoritative) ---
@@ -245,21 +280,41 @@ function ReadyConversation({
     }
   }
 
-  async function togglePref(kind: "pin" | "mute") {
-    const next = kind === "pin" ? !meta.isPinned : !meta.isMuted;
-    patchMeta(kind === "pin" ? { isPinned: next } : { isMuted: next });
-    const { error } = await supabase.rpc("set_conversation_preferences", {
-      p_conversation_id: meta.id,
-      ...(kind === "pin" ? { p_is_pinned: next } : { p_is_muted: next }),
-    });
+  async function togglePref(kind: "pin" | "mute" | "favorite") {
+    const field = kind === "pin" ? "isPinned" : kind === "mute" ? "isMuted" : "isFavorite";
+    const param = kind === "pin" ? "p_is_pinned" : kind === "mute" ? "p_is_muted" : "p_is_favorite";
+    const next = !meta[field];
+    patchMeta({ [field]: next });
+    const { error } = await supabase.rpc("set_conversation_preferences", { p_conversation_id: meta.id, [param]: next });
     if (error) {
-      patchMeta(kind === "pin" ? { isPinned: !next } : { isMuted: !next });
+      patchMeta({ [field]: !next });
       push({ tone: "error", title: "Couldn't update conversation", description: friendlyError(error) });
       return;
     }
     refreshActivity();
-    push({ tone: "success", title: kind === "pin" ? (next ? "Pinned" : "Unpinned") : next ? "Muted" : "Unmuted" });
+    const titles = {
+      pin: next ? "Pinned to top" : "Unpinned",
+      mute: next ? "Muted" : "Unmuted",
+      favorite: next ? "Added to favorites" : "Removed from favorites",
+    };
+    push({ tone: "success", title: titles[kind] });
   }
+
+  const onPin = useCallback(
+    (m: Message, pinned: boolean) => {
+      api
+        .setPinned(m.id, pinned)
+        .then(() => push({ tone: "success", title: pinned ? "Message pinned for everyone" : "Message unpinned" }))
+        .catch((e: unknown) => push({ tone: "error", title: "Pin not saved", description: e instanceof Error ? e.message : undefined }));
+    },
+    [api, push],
+  );
+
+  const jumpTo = useCallback((id: string) => {
+    setHighlightedId(id);
+    document.getElementById(`m-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.setTimeout(() => setHighlightedId(null), 2500);
+  }, []);
 
   async function confirmClearHistory() {
     setClearing(true);
@@ -315,6 +370,8 @@ function ReadyConversation({
           activeCall={!!activeCall}
           onTogglePanel={(p) => setPanel((cur) => (cur?.type === p ? null : { type: p }))}
           onTogglePin={() => void togglePref("pin")}
+          onToggleFavorite={() => void togglePref("favorite")}
+          onAddPeople={meta.kind === "direct" && meta.canPost && meta.otherUserId !== me ? () => setAddPeopleOpen(true) : undefined}
           onToggleMute={() => void togglePref("mute")}
           onRename={() => {
             setRenameValue(meta.groupTitle ?? "");
@@ -336,6 +393,7 @@ function ReadyConversation({
                 : "This is the start of the group chat."
           }
           seenLabelFor={seenLabelFor}
+          receiptFor={receiptFor}
           highlightedId={highlightedId}
           typingLabel={typingLabel}
           onReply={meta.canPost ? setReplyTo : undefined}
@@ -344,6 +402,8 @@ function ReadyConversation({
           onDelete={setPendingDelete}
           onReact={onReact}
           onCopy={onCopy}
+          onPin={meta.canPost ? onPin : undefined}
+          onForward={setForwarding}
         />
         <Composer
           placeholder={isChannel ? `Post in #${meta.title}` : `Message ${meta.title}`}
@@ -386,6 +446,25 @@ function ReadyConversation({
             router.push("/chat");
           }}
         />
+      ) : panel?.type === "files" ? (
+        <FilesPanel conversationId={meta.id} clearedAt={meta.clearedAt} people={people} onJump={jumpTo} onClose={() => setPanel(null)} />
+      ) : panel?.type === "pinned" ? (
+        <PinnedPanel
+          conversationId={meta.id}
+          api={api}
+          people={people}
+          canPin={meta.canPost}
+          onJump={jumpTo}
+          onUnpin={(id) => {
+            const m = api.store.messages.get(id);
+            if (m) onPin(m, false);
+            else
+              void supabase.rpc("pin_message", { p_message_id: id, p_pinned: false }).then(({ error }) => {
+                if (error) push({ tone: "error", title: "Couldn't unpin", description: friendlyError(error) });
+              });
+          }}
+          onClose={() => setPanel(null)}
+        />
       ) : panel?.type === "search" ? (
         <SearchPanel
           conversationId={meta.id}
@@ -398,6 +477,16 @@ function ReadyConversation({
           }}
           onClose={() => setPanel(null)}
         />
+      ) : null}
+
+      <ForwardDialog
+        message={forwarding}
+        attachments={forwarding ? (api.store.attachments.get(forwarding.id) ?? []) : []}
+        onClose={() => setForwarding(null)}
+      />
+
+      {meta.kind === "direct" && meta.otherUserId ? (
+        <AddPeopleDialog open={addPeopleOpen} existingIds={[me, meta.otherUserId]} onClose={() => setAddPeopleOpen(false)} />
       ) : null}
 
       <ConfirmDialog

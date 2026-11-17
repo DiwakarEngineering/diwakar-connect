@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useId, useRef, useState } from "react";
 import clsx from "clsx";
-import { AlertCircle, Copy, CornerUpLeft, MessageSquareReply, MoreHorizontal, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { AlertCircle, Check, CheckCheck, Copy, CornerUpLeft, Forward, MessageSquareReply, MoreHorizontal, Pencil, Pin, PinOff, SmilePlus, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Menu, type MenuItem } from "@/components/ui/menu";
 import type { Person } from "@/components/providers/people-provider";
@@ -11,6 +11,7 @@ import { fullDateTime, messageTime } from "@/lib/format";
 import { MessageBody } from "./message-body";
 import { AttachmentList } from "./attachment-view";
 import { EmojiPicker } from "./emoji-picker";
+import { Sticker } from "./stickers";
 import type { Attachment, Message, Reaction } from "./types";
 
 export type MessageItemProps = {
@@ -31,7 +32,11 @@ export type MessageItemProps = {
   canReact: boolean;
   highlighted?: boolean;
   seenLabel?: string | null;
+  /** Own messages in direct/group chats: delivery state. */
+  receipt?: "sent" | "delivered" | "read" | null;
   onReply?: (message: Message) => void;
+  onPin?: (message: Message, pinned: boolean) => void;
+  onForward?: (message: Message) => void;
   onOpenThread?: (message: Message) => void;
   onSaveEdit: (message: Message, body: string) => Promise<boolean>;
   onDelete: (message: Message) => void;
@@ -131,6 +136,7 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
     canReact,
     highlighted,
     seenLabel,
+    receipt,
   } = props;
   const [editing, setEditing] = useState(false);
   const senderName = sender?.display_name ?? (message.sender_id ? "Former employee" : "Diwakar Connect");
@@ -155,6 +161,14 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
   if (!deleted && !message.pending && !message.failed) {
     if (props.onReply) actions.push({ label: "Reply", icon: <CornerUpLeft className="h-4 w-4" />, onSelect: () => props.onReply?.(message) });
     if (props.onOpenThread) actions.push({ label: "Open thread", icon: <MessageSquareReply className="h-4 w-4" />, onSelect: () => props.onOpenThread?.(message) });
+    if (props.onForward) actions.push({ label: "Forward", icon: <Forward className="h-4 w-4" />, onSelect: () => props.onForward?.(message) });
+    if (props.onPin) {
+      actions.push(
+        message.pinned_at
+          ? { label: "Unpin", icon: <PinOff className="h-4 w-4" />, onSelect: () => props.onPin?.(message, false) }
+          : { label: "Pin for everyone", icon: <Pin className="h-4 w-4" />, onSelect: () => props.onPin?.(message, true) },
+      );
+    }
     if (message.body) actions.push({ label: "Copy text", icon: <Copy className="h-4 w-4" />, onSelect: () => props.onCopy(message) });
     if (canEdit) actions.push({ label: "Edit", icon: <Pencil className="h-4 w-4" />, onSelect: () => setEditing(true) });
     if (canDelete) {
@@ -193,12 +207,23 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
             <time dateTime={message.created_at} title={fullDateTime(message.created_at)} className="text-xs text-ink-400">
               {messageTime(message.created_at)}
             </time>
+            {message.pinned_at && !deleted ? <PinnedTag /> : null}
           </div>
         ) : (
-          <span className="sr-only">
-            {senderName}, {messageTime(message.created_at)}
-          </span>
+          <>
+            <span className="sr-only">
+              {senderName}, {messageTime(message.created_at)}
+            </span>
+            {message.pinned_at && !deleted ? <PinnedTag /> : null}
+          </>
         )}
+
+        {message.forwarded_from_id && !deleted ? (
+          <div className="mb-0.5 flex items-center gap-1 text-[11px] italic text-ink-500">
+            <Forward className="h-3 w-3" aria-hidden="true" />
+            Forwarded
+          </div>
+        ) : null}
 
         {message.reply_to_id && !deleted ? <ReplyQuote parent={parent} name={parentSenderName} /> : null}
 
@@ -210,6 +235,11 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
           <EditBox initial={message.body} onSave={(body) => props.onSaveEdit(message, body)} onCancel={() => setEditing(false)} />
         ) : (
           <>
+            {message.sticker ? (
+              <div className="mt-1">
+                <Sticker id={message.sticker} />
+              </div>
+            ) : null}
             {message.body ? <MessageBody body={message.body} mentionNames={mentionNames} isOwn={isOwn} /> : null}
             {message.edited_at ? (
               <span className="text-[11px] text-ink-400" title={`Edited ${fullDateTime(message.edited_at)}`}>
@@ -233,6 +263,8 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
           </div>
         ) : message.pending ? (
           <span className="text-[11px] text-ink-400">Sending...</span>
+        ) : receipt && !deleted ? (
+          <ReceiptMark state={receipt} />
         ) : null}
 
         {grouped_reactions.size > 0 ? (
@@ -309,6 +341,30 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
     </div>
   );
 });
+
+function PinnedTag() {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-50 px-1.5 py-px text-[10px] font-semibold text-brand-700">
+      <Pin className="h-2.5 w-2.5" aria-hidden="true" />
+      Pinned
+    </span>
+  );
+}
+
+const RECEIPT_LABEL = { sent: "Sent", delivered: "Delivered", read: "Read" } as const;
+
+function ReceiptMark({ state }: { state: "sent" | "delivered" | "read" }) {
+  const Icon = state === "sent" ? Check : CheckCheck;
+  return (
+    <span
+      className={clsx("inline-flex items-center gap-0.5 text-[11px]", state === "read" ? "text-brand-600" : "text-ink-400")}
+      title={RECEIPT_LABEL[state]}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="sr-only">{RECEIPT_LABEL[state]}</span>
+    </span>
+  );
+}
 
 function ReactionChip({
   emoji,

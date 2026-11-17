@@ -9,6 +9,8 @@ import type { Person } from "@/components/providers/people-provider";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_FILES_PER_MESSAGE, MAX_MESSAGE_LENGTH } from "@/lib/constants";
 import { fileSize } from "@/lib/format";
 import { EmojiPicker } from "./emoji-picker";
+import { StickerPicker } from "./stickers";
+import { VoiceRecorder } from "./voice-recorder";
 import type { Message, SendInput } from "./types";
 
 type Props = {
@@ -47,6 +49,7 @@ export function Composer({
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [recording, setRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -149,6 +152,17 @@ export function Composer({
     setMentionQuery(null);
     onCancelReply?.();
     onStopTyping?.();
+    try {
+      await onSend(input);
+    } catch (e) {
+      push({ tone: "error", title: "Message not sent", description: e instanceof Error ? e.message : undefined });
+    }
+  }
+
+  /** Stickers and voice messages are sent immediately as their own message. */
+  async function sendStandalone(extra: Pick<SendInput, "files" | "sticker">) {
+    const input: SendInput = { body: "", mentions: [], replyToId: replyTo?.message.id ?? null, ...extra };
+    onCancelReply?.();
     try {
       await onSend(input);
     } catch (e) {
@@ -310,45 +324,59 @@ export function Composer({
           className="block max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-3 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-0"
         />
         <div className="flex items-center gap-1 px-2 pb-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={ALLOWED_ATTACHMENT_TYPES.join(",")}
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files) addFiles(e.target.files);
-              e.target.value = "";
-            }}
+          {recording ? null : (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ALLOWED_ATTACHMENT_TYPES.join(",")}
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) addFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-800"
+                aria-label="Attach files"
+              >
+                <Paperclip className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <EmojiPicker
+                label="Insert emoji"
+                align="start"
+                onPick={(emoji) => insertAtCaret(emoji)}
+                trigger={<Smile className="h-4 w-4" aria-hidden="true" />}
+                triggerClassName="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-800"
+              />
+              <StickerPicker onPick={(id) => void sendStandalone({ files: [], sticker: id })} />
+            </>
+          )}
+          <VoiceRecorder
+            maxAttachmentMb={maxAttachmentMb}
+            onActiveChange={setRecording}
+            onRecorded={(file) => void sendStandalone({ files: [file], sticker: null })}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-800"
-            aria-label="Attach files"
-          >
-            <Paperclip className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <EmojiPicker
-            label="Insert emoji"
-            align="start"
-            onPick={(emoji) => insertAtCaret(emoji)}
-            trigger={<Smile className="h-4 w-4" aria-hidden="true" />}
-            triggerClassName="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 hover:text-ink-800"
-          />
-          <span id={hintId} className="ml-1 hidden text-[11px] text-ink-400 sm:inline">
-            Enter to send · Shift+Enter for a new line · @ to mention
-          </span>
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={!text.trim() && files.length === 0}
-            className="ml-auto flex h-8 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-ink-200 disabled:text-ink-500"
-            aria-label="Send message"
-          >
-            <SendHorizontal className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Send</span>
-          </button>
+          {recording ? null : (
+            <>
+              <span id={hintId} className="ml-1 hidden min-w-0 truncate text-[11px] text-ink-400 2xl:inline">
+                Enter to send · Shift+Enter for a new line · @ to mention
+              </span>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={!text.trim() && files.length === 0}
+                className="ml-auto flex h-8 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-ink-200 disabled:text-ink-500"
+                aria-label="Send message"
+              >
+                <SendHorizontal className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Send</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

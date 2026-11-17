@@ -211,6 +211,8 @@ export type Database = {
           last_read_at: string | null;
           is_pinned: boolean;
           is_muted: boolean;
+          is_favorite: boolean;
+          last_delivered_at: string | null;
           cleared_at: string | null;
           updated_at: string;
         };
@@ -231,6 +233,10 @@ export type Database = {
           edited_at: string | null;
           deleted_at: string | null;
           deleted_by: string | null;
+          pinned_at: string | null;
+          pinned_by: string | null;
+          forwarded_from_id: string | null;
+          sticker: string | null;
           search: unknown;
         };
         Insert: {
@@ -240,6 +246,8 @@ export type Database = {
           body: string;
           reply_to_id?: string | null;
           mentions?: string[];
+          forwarded_from_id?: string | null;
+          sticker?: string | null;
         };
         Update: { body?: string; mentions?: string[]; deleted_at?: string | null };
         Relationships: [];
@@ -373,11 +381,23 @@ export type Database = {
       remove_conversation_member: { Args: { p_conversation_id: string; p_user_id: string }; Returns: undefined };
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
       set_conversation_preferences: {
-        Args: { p_conversation_id: string; p_is_pinned?: boolean | null; p_is_muted?: boolean | null };
+        Args: {
+          p_conversation_id: string;
+          p_is_pinned?: boolean | null;
+          p_is_muted?: boolean | null;
+          p_is_favorite?: boolean | null;
+        };
         Returns: undefined;
       };
       clear_conversation_history: { Args: { p_conversation_id: string }; Returns: string };
       mark_all_notifications_read: { Args: never; Returns: number };
+      pin_message: { Args: { p_message_id: string; p_pinned: boolean }; Returns: undefined };
+      mark_conversations_delivered: { Args: never; Returns: undefined };
+      find_group_conversation: { Args: { p_member_ids: string[] }; Returns: string | null };
+      get_message_receipts: {
+        Args: { p_conversation_id: string };
+        Returns: { user_id: string; last_read_at: string | null; last_delivered_at: string | null }[];
+      };
       get_read_receipts: {
         Args: { p_conversation_id: string };
         Returns: { user_id: string; last_read_at: string }[];
@@ -397,6 +417,10 @@ export type Database = {
           unread_count: number;
           is_pinned: boolean;
           is_muted: boolean;
+          is_favorite: boolean;
+          team_id: string | null;
+          team_name: string | null;
+          channel_id: string | null;
         }[];
       };
       list_teams: {

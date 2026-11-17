@@ -14,7 +14,6 @@ import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/states";
 import { useSession } from "@/components/providers/session-provider";
 import { useActivity } from "@/components/providers/activity-provider";
 import { usePeopleById } from "@/components/providers/people-provider";
-import { NewChatDialog } from "@/components/chat/new-chat-dialog";
 import { NotificationItem, notificationHref } from "@/components/notifications/notification-item";
 import { callsAvailable, useCallConfig } from "@/components/calls/use-call-config";
 import { useConversationTitles } from "@/components/calls/use-conversation-titles";
@@ -52,7 +51,6 @@ export default function HomePage() {
   const callConfig = useCallConfig();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newChatOpen, setNewChatOpen] = useState(false);
   const supabase = getSupabaseBrowserClient();
 
   const load = useCallback(async () => {
@@ -65,7 +63,7 @@ export default function HomePage() {
         .is("read_at", null)
         .order("created_at", { ascending: false })
         .limit(5),
-      supabase.rpc("list_my_conversations", { p_unread_only: true, p_limit: 6 }),
+      supabase.rpc("list_my_conversations", { p_unread_only: true, p_limit: 60 }),
       supabase.rpc("list_my_channels"),
       supabase.from("calls").select("*").eq("status", "active").order("started_at", { ascending: false }).limit(5),
     ]);
@@ -75,7 +73,13 @@ export default function HomePage() {
       return;
     }
     setError(null);
-    setData({ mentions: mentions.data ?? [], chats: chats.data ?? [], channels: channels.data ?? [], calls: calls.data ?? [] });
+    setData({
+      mentions: mentions.data ?? [],
+      // Channels have their own section below.
+      chats: (chats.data ?? []).filter((c) => c.kind !== "channel").slice(0, 6),
+      channels: channels.data ?? [],
+      calls: calls.data ?? [],
+    });
   }, [session.userId, supabase]);
 
   useEffect(() => {
@@ -112,14 +116,13 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setNewChatOpen(true)}
+            <Link
+              href="/chat/new"
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white shadow-card hover:bg-brand-700"
             >
               <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
               New chat
-            </button>
+            </Link>
             <Link href="/calls" className="inline-flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-4 text-sm font-medium text-ink-800 hover:bg-canvas">
               <Phone className="h-4 w-4" aria-hidden="true" />
               Calls
@@ -281,7 +284,6 @@ export default function HomePage() {
           </div>
         )}
       </div>
-      <NewChatDialog open={newChatOpen} onClose={() => setNewChatOpen(false)} />
     </div>
   );
 }

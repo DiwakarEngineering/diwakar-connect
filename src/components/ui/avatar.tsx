@@ -43,10 +43,15 @@ export type PresenceState = { label: string; dotClass: string; online: boolean }
 
 /** Combines the person's chosen availability with whether they're connected. */
 export function usePresenceState(userId: string | undefined, availability: Enums<"availability"> | undefined): PresenceState {
-  const { online } = usePresence();
+  const { online, activities } = usePresence();
   const isOnline = !!userId && online.has(userId);
   if (!availability || availability === "offline" || !isOnline) {
     return { label: "Offline", dotClass: "bg-white ring-2 ring-inset ring-ink-300", online: false };
+  }
+  // Calls and meetings show as busy, unless the person chose Do not disturb.
+  const activity = userId ? activities.get(userId) : undefined;
+  if (activity && availability !== "do_not_disturb") {
+    return { label: activity === "meeting" ? "In a meeting" : "In a call", dotClass: AVAILABILITY.busy.dot, online: true };
   }
   return { label: AVAILABILITY[availability].label, dotClass: AVAILABILITY[availability].dot, online: true };
 }

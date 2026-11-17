@@ -32,7 +32,7 @@ export function useConversationMeta(conversationId: string) {
       supabase.rpc("can_post_to_conversation", { p_conversation: conversationId }),
       supabase
         .from("conversation_user_state")
-        .select("is_pinned, is_muted, cleared_at")
+        .select("is_pinned, is_muted, is_favorite, cleared_at")
         .eq("conversation_id", conversationId)
         .eq("user_id", session.userId)
         .maybeSingle(),
@@ -82,6 +82,7 @@ export function useConversationMeta(conversationId: string) {
         canManage,
         isPinned: userState?.is_pinned ?? false,
         isMuted: userState?.is_muted ?? false,
+        isFavorite: userState?.is_favorite ?? false,
         clearedAt: userState?.cleared_at ?? null,
         channel,
         team,

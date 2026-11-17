@@ -26,6 +26,7 @@ type Props = {
   emptyTitle: string;
   emptyDescription: string;
   seenLabelFor: (m: Message) => string | null;
+  receiptFor?: (m: Message) => "sent" | "delivered" | "read" | null;
   highlightedId: string | null;
   typingLabel: string | null;
   onReply?: (m: Message) => void;
@@ -34,6 +35,8 @@ type Props = {
   onDelete: (m: Message) => void;
   onReact: (m: Message, emoji: string) => void;
   onCopy: (m: Message) => void;
+  onPin?: (m: Message, pinned: boolean) => void;
+  onForward?: (m: Message) => void;
 };
 
 export function MessageList(props: Props) {
@@ -184,7 +187,10 @@ export function MessageList(props: Props) {
                 canReact={props.permissions.canReact}
                 highlighted={props.highlightedId === id}
                 seenLabel={props.seenLabelFor(m)}
+                receipt={props.receiptFor?.(m) ?? null}
                 onReply={props.onReply}
+                onPin={props.onPin}
+                onForward={props.onForward}
                 onOpenThread={props.onOpenThread}
                 onSaveEdit={props.onSaveEdit}
                 onDelete={props.onDelete}
