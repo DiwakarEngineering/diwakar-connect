@@ -49,6 +49,7 @@ import { useSession } from "@/components/providers/session-provider";
 import { usePeopleById } from "@/components/providers/people-provider";
 import { useConversationMeta } from "@/components/conversation/use-conversation-meta";
 import { readApiError } from "@/lib/errors";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isDemoMode } from "@/lib/env";
 import { useCallConfig } from "./use-call-config";
 import { AudioTrack, ParticipantTile, VideoElement } from "./participant-tile";
@@ -56,6 +57,12 @@ import { MeetingChat } from "./meeting-chat";
 import { OutgoingRing, ParticipantsPanel, handRaised, useRings } from "./meeting-panels";
 import { Menu } from "@/components/ui/menu";
 import { startRingback, stopRingtone } from "@/lib/sounds";
+import { ShareDrawer, isPdf } from "./share-drawer";
+import { Presentation } from "./presentation";
+import { Whiteboard } from "./whiteboard";
+import { readPresenterMode, readShare, setPresenterMode, setShare, type PresenterMode } from "./stage";
+import { sendMessageTo } from "@/components/conversation/send-message";
+import type { Tables } from "@/lib/database.types";
 import { describeMediaError, supportsOutputSelection, supportsScreenShare } from "./media-errors";
 
 type Phase =
@@ -147,6 +154,9 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const [reactOpen, setReactOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [someoneJoined, setSomeoneJoined] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const stoppingScreen = useRef(false);
   const rings = useRings(call?.id ?? null);
   const elapsed = useElapsed(phase.kind === "connected" || phase.kind === "reconnecting" ? (call?.startedAt ?? null) : null);
 
@@ -275,7 +285,7 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     bump();
   }
 
-  async function moderate(action: "mute" | "remove" | "mute_all", userId?: string) {
+  async function moderate(action: "mute" | "remove" | "mute_all" | "stop_share", userId?: string) {
     if (!callRef.current) return;
     const res = await fetch("/api/calls/moderate", {
       method: "POST",
@@ -286,7 +296,8 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
       push({ tone: "error", title: "Action failed", description: (await readApiError(res)).message });
       return;
     }
-    push({ tone: "success", title: action === "remove" ? "Removed from the meeting" : action === "mute" ? "Muted" : "Everyone else is muted" });
+    const done = { remove: "Removed from the meeting", mute: "Muted", mute_all: "Everyone else is muted", stop_share: "Presenting stopped" } as const;
+    push({ tone: "success", title: done[action] });
   }
 
   function copyLink() {
@@ -303,6 +314,108 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
       else await document.documentElement.requestFullscreen();
     } catch {
       push({ tone: "error", title: "Full screen isn't available here" });
+    }
+  }
+
+  /** Stop whatever I'm presenting (screen, slides, whiteboard). */
+  async function stopMyPresenting() {
+    const room = roomRef.current;
+    if (!room) return;
+    if (room.localParticipant.isScreenShareEnabled) {
+      stoppingScreen.current = true;
+      await room.localParticipant.setScreenShareEnabled(false).catch(() => undefined);
+    }
+    if (readShare(room.localParticipant)) await setShare(room.localParticipant, null).catch(() => undefined);
+    bump();
+  }
+
+  /** Organizer/admin taking over: stop the current presenter first (server-enforced). */
+  async function clearStageFor(identity: string | null) {
+    if (!identity || identity === roomRef.current?.localParticipant.identity) return;
+    await moderate("stop_share", identity);
+  }
+
+  async function startScreen(opts: { audio: boolean; mode: PresenterMode }) {
+    const room = roomRef.current;
+    if (!room) return;
+    setShareBusy(true);
+    try {
+      await clearStageFor(stagePresenterRef.current);
+      if (readShare(room.localParticipant)) await setShare(room.localParticipant, null);
+      await setPresenterMode(room.localParticipant, opts.mode);
+      await room.localParticipant.setScreenShareEnabled(true, { audio: opts.audio, systemAudio: opts.audio ? "include" : "exclude" });
+      setShareOpen(false);
+    } catch (e) {
+      const blocked = e instanceof Error && (e.name === "NotAllowedError" || e.name === "AbortError");
+      push({
+        tone: blocked ? "info" : "error",
+        title: blocked ? "Screen sharing was cancelled" : "Couldn't share your screen",
+        description: blocked ? "Nothing is being shared. If your browser blocked it, allow screen sharing for this site and try again." : describeMediaError(e, "screen"),
+      });
+    } finally {
+      setShareBusy(false);
+      bump();
+    }
+  }
+
+  async function startShare(share: Parameters<typeof setShare>[1]) {
+    const room = roomRef.current;
+    if (!room || !share) return;
+    setShareBusy(true);
+    try {
+      await clearStageFor(stagePresenterRef.current);
+      if (room.localParticipant.isScreenShareEnabled) {
+        stoppingScreen.current = true;
+        await room.localParticipant.setScreenShareEnabled(false);
+      }
+      await setShare(room.localParticipant, share);
+      setShareOpen(false);
+    } catch {
+      push({ tone: "error", title: "Couldn't start presenting" });
+    } finally {
+      setShareBusy(false);
+      bump();
+    }
+  }
+
+  async function presentFile(att: Tables<"attachments">) {
+    if (isPdf(att)) return startShare({ kind: "pdf", path: att.object_path, name: att.file_name, page: 1, pages: 0 });
+    setShareBusy(true);
+    const res = await fetch("/api/files/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attachmentId: att.id }),
+    });
+    setShareBusy(false);
+    if (!res.ok) {
+      push({ tone: "error", title: "Can't present this file yet", description: (await readApiError(res)).message });
+      return;
+    }
+    const { attachment } = (await res.json()) as { attachment: Tables<"attachments"> };
+    await startShare({ kind: "pdf", path: attachment.object_path, name: att.file_name, page: 1, pages: 0 });
+  }
+
+  async function uploadAndPresent(file: File) {
+    setShareBusy(true);
+    try {
+      // Saved to the conversation, so only its members can open it.
+      const messageId = await sendMessageTo(conversationId, session.userId, { body: "", mentions: [], replyToId: null, files: [file] });
+      const { data } = await getSupabaseBrowserClient().from("attachments").select("*").eq("message_id", messageId).maybeSingle();
+      setShareBusy(false);
+      if (data) await presentFile(data);
+    } catch (e) {
+      setShareBusy(false);
+      push({ tone: "error", title: "Upload failed", description: e instanceof Error ? e.message : undefined });
+    }
+  }
+
+  async function saveBoardToChat(png: Blob) {
+    try {
+      const file = new File([png], `Whiteboard ${new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", ".")}.png`, { type: "image/png" });
+      await sendMessageTo(conversationId, session.userId, { body: "Whiteboard from the meeting", mentions: [], replyToId: null, files: [file] });
+      push({ tone: "success", title: "Whiteboard saved to the chat" });
+    } catch (e) {
+      push({ tone: "error", title: "Couldn't save the whiteboard", description: e instanceof Error ? e.message : undefined });
     }
   }
 
@@ -356,6 +469,12 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
       .on(RoomEvent.LocalTrackUnpublished, bump)
       .on(RoomEvent.ActiveSpeakersChanged, bump)
       .on(RoomEvent.ParticipantAttributesChanged, bump)
+      .on(RoomEvent.LocalTrackUnpublished, (pub) => {
+        if (pub.source === Track.Source.ScreenShare && !stoppingScreen.current) {
+          push({ tone: "info", title: "Screen sharing ended", description: "Sharing stopped from the browser or the shared window closed." });
+        }
+        stoppingScreen.current = false;
+      })
       .on(RoomEvent.ConnectionQualityChanged, bump)
       .on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: Participant, _kind?: unknown, topic?: string) => {
         if (topic !== "reactions" || !participant) return;
@@ -511,7 +630,14 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const people = usePeopleById([...participants.map((p) => p.identity), ...rings.map((r) => r.user_id)]);
   const nameOf = (p: Participant) => people.get(p.identity)?.display_name ?? (p.name || "Guest");
   const screenSharer = participants.find((p) => p.isScreenShareEnabled);
-  const isLocalSharing = !!room?.localParticipant.isScreenShareEnabled;
+  // The stage: a screen share wins over slides, which win over a whiteboard.
+  const pdfPresenter = participants.find((p) => readShare(p)?.kind === "pdf");
+  const boardOwner = participants.find((p) => readShare(p)?.kind === "board");
+  const stagePresenter = screenSharer ?? pdfPresenter ?? boardOwner ?? null;
+  const stagePresenterRef = useRef<string | null>(null);
+  useEffect(() => {
+    stagePresenterRef.current = stagePresenter?.identity ?? null;
+  }, [stagePresenter]);
   const canEndForAll = !!call && (call.startedBy === session.userId || isAdmin);
   const title = meta?.title ?? "Call";
   const backHref =
@@ -674,7 +800,13 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     );
   const reactionsFor = (identity: string) => reactions.filter((r) => r.identity === identity);
   const local = room?.localParticipant;
+  const canModerateStage = !!call && (call.startedBy === session.userId || isAdmin);
   const myHand = !!local && handRaised(local);
+  const iPresent = !!local && stagePresenter === local;
+  const othersPresenting = !!stagePresenter && stagePresenter !== local;
+  const shareBlocked = othersPresenting && !canModerateStage ? `${nameOf(stagePresenter!)} is presenting. Ask them to stop, or the organizer can take over.` : null;
+  const pmode = screenSharer ? readPresenterMode(screenSharer) : "content";
+  const pdfShare = pdfPresenter ? readShare(pdfPresenter) : null;
   // Speaker view: the most recent active speaker (not me if possible), else the first other person.
   const speakerOrder = room?.activeSpeakers ?? [];
   const featured =
@@ -694,7 +826,7 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
       {...opts}
     />
   );
-  const canModerate = !!call && (call.startedBy === session.userId || isAdmin);
+  const canModerate = canModerateStage;
   const tb = (active?: boolean) =>
     clsx(
       "flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition-colors",
@@ -730,18 +862,22 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         onClick={() => void toggle("mic")}
         icon={micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
       />
-      {supportsScreenShare() ? (
-        <ControlButton
-          label={isLocalSharing ? "Stop sharing" : "Share screen"}
-          active={!isLocalSharing}
-          highlight={isLocalSharing}
-          busy={busyControl === "screen"}
-          disabled={!!screenSharer && !isLocalSharing}
-          onClick={() => void toggle("screen")}
-          icon={<MonitorUp className="h-5 w-5" />}
-          className="hidden sm:flex"
-        />
-      ) : null}
+      <ControlButton
+        label={iPresent ? "Stop presenting" : "Share content"}
+        active={!iPresent}
+        highlight={iPresent || shareOpen}
+        busy={shareBusy}
+        onClick={() => {
+          if (iPresent) void stopMyPresenting();
+          else {
+            setShareOpen((v) => !v);
+            setPanelOpen(false);
+            setChatOpen(false);
+          }
+        }}
+        icon={<MonitorUp className="h-5 w-5" />}
+        className="hidden sm:flex"
+      />
     </>
   );
 
@@ -765,12 +901,12 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         </div>
 
         <nav aria-label="Meeting tools" className="flex items-center gap-0.5">
-          <button type="button" onClick={() => { setPanelOpen((v) => !v); setChatOpen(false); }} aria-pressed={panelOpen} className={tb(panelOpen)} title="Participants" aria-label={`Participants (${n})`}>
+          <button type="button" onClick={() => { setPanelOpen((v) => !v); setChatOpen(false); setShareOpen(false); }} aria-pressed={panelOpen} className={tb(panelOpen)} title="Participants" aria-label={`Participants (${n})`}>
             <Users className="h-5 w-5" aria-hidden="true" />
             <span className="hidden text-xs md:inline" aria-hidden="true">{n}</span>
           </button>
           {meta ? (
-            <button type="button" onClick={() => { setChatOpen((v) => !v); setPanelOpen(false); }} aria-pressed={chatOpen} className={tb(chatOpen)} title="Meeting chat" aria-label="Meeting chat">
+            <button type="button" onClick={() => { setChatOpen((v) => !v); setPanelOpen(false); setShareOpen(false); }} aria-pressed={chatOpen} className={tb(chatOpen)} title="Meeting chat" aria-label="Meeting chat">
               <MessageSquare className="h-5 w-5" aria-hidden="true" />
             </button>
           ) : null}
@@ -826,15 +962,25 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         </div>
       ) : null}
 
-      {screenSharer ? (
+      {stagePresenter ? (
         <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600/15 px-4 py-2 text-sm text-brand-100 ring-1 ring-brand-500/30" role="status">
           <span className="flex min-w-0 items-center gap-2">
             <MonitorUp className="h-4 w-4 shrink-0 text-brand-300" aria-hidden="true" />
-            <span className="truncate">{isLocalSharing ? "You're sharing your screen" : `${nameOf(screenSharer)} is presenting`}</span>
+            <span className="truncate">
+              {iPresent
+                ? screenSharer === local
+                  ? "You're sharing your screen"
+                  : `You're presenting ${pdfShare?.kind === "pdf" ? pdfShare.name : "the whiteboard"}`
+                : `${nameOf(stagePresenter)} is presenting${screenSharer ? "" : pdfShare ? ` ${pdfShare.kind === "pdf" ? pdfShare.name : ""}` : " the whiteboard"}`}
+            </span>
           </span>
-          {isLocalSharing ? (
-            <button type="button" onClick={() => void toggle("screen")} className="shrink-0 rounded-lg bg-danger-600 px-3 py-1 text-xs font-semibold text-white hover:bg-danger-700">
-              Stop sharing
+          {iPresent ? (
+            <button type="button" onClick={() => void stopMyPresenting()} className="shrink-0 rounded-lg bg-danger-600 px-3 py-1 text-xs font-semibold text-white hover:bg-danger-700">
+              {screenSharer === local ? "Stop sharing" : "Stop presenting"}
+            </button>
+          ) : canModerateStage ? (
+            <button type="button" onClick={() => void moderate("stop_share", stagePresenter.identity)} className="shrink-0 rounded-lg border border-brand-400/50 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-600/30">
+              Stop their presenting
             </button>
           ) : null}
         </div>
@@ -844,24 +990,47 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         <main id="main" className="min-h-0 flex-1 overflow-y-auto">
           {showRinging ? (
             <OutgoingRing rings={rings} people={people} onCancel={() => void (canEndForAll ? endForAll() : leave())} />
-          ) : screenSharer ? (
+          ) : stagePresenter && room && local ? (
             <div className="flex h-full flex-col gap-3">
+              {/* Everyone else moves to a strip; in side-by-side mode the presenter sits beside the content. */}
               <div className="flex shrink-0 gap-3 overflow-x-auto pb-1">
-                {participants.map((p) => (
-                  <div key={p.identity} className="w-40 shrink-0">
-                    {tile(p, { compact: true })}
-                  </div>
-                ))}
+                {participants
+                  .filter((p) => !(screenSharer && pmode !== "content" && p === screenSharer))
+                  .map((p) => (
+                    <div key={p.identity} className="w-36 shrink-0">
+                      {tile(p, { compact: true })}
+                    </div>
+                  ))}
               </div>
-              <div className="min-h-0 flex-1">
-                <ParticipantTile
-                  participant={screenSharer}
-                  source={Track.Source.ScreenShare}
-                  name={nameOf(screenSharer)}
-                  isLocal={screenSharer === local}
-                  version={version}
-                  large
-                />
+              <div className={clsx("min-h-0 flex-1", screenSharer && pmode === "side" && "grid grid-cols-1 gap-3 lg:grid-cols-[3fr_1fr]")}>
+                {screenSharer ? (
+                  <div className="relative h-full min-h-0">
+                    <ParticipantTile participant={screenSharer} source={Track.Source.ScreenShare} name={nameOf(screenSharer)} isLocal={screenSharer === local} version={version} large />
+                    {pmode === "pip" ? <div className="absolute bottom-3 right-3 w-48 shadow-pop">{tile(screenSharer, { compact: true })}</div> : null}
+                  </div>
+                ) : pdfPresenter && pdfShare?.kind === "pdf" ? (
+                  <Presentation
+                    room={room}
+                    me={local.identity}
+                    presenter={pdfPresenter.identity}
+                    share={pdfShare}
+                    nameOf={(id) => people.get(id)?.display_name ?? "Participant"}
+                    onStop={pdfPresenter === local ? () => void stopMyPresenting() : canModerateStage ? () => void moderate("stop_share", pdfPresenter.identity) : undefined}
+                  />
+                ) : boardOwner ? (
+                  <Whiteboard
+                    key={boardOwner.identity}
+                    room={room}
+                    me={local.identity}
+                    owner={boardOwner.identity}
+                    organizer={call?.startedBy ?? null}
+                    canClear={boardOwner === local || canModerateStage}
+                    nameOf={(id) => people.get(id)?.display_name ?? "Participant"}
+                    onClose={boardOwner === local ? () => void stopMyPresenting() : canModerateStage ? () => void moderate("stop_share", boardOwner.identity) : undefined}
+                    onSaveToChat={meta?.canPost ? saveBoardToChat : undefined}
+                  />
+                ) : null}
+                {screenSharer && pmode === "side" ? <div className="hidden min-h-0 lg:block">{tile(screenSharer)}</div> : null}
               </div>
             </div>
           ) : layout === "speaker" && featured && n > 1 ? (
@@ -903,6 +1072,18 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
           />
         ) : chatOpen && meta ? (
           <MeetingChat meta={meta} onClose={() => setChatOpen(false)} />
+        ) : shareOpen ? (
+          <ShareDrawer
+            conversationId={conversationId}
+            audioSupported={supportsScreenShare() && /Chrome|Edg/.test(navigator.userAgent)}
+            busy={shareBusy}
+            blockedReason={shareBlocked}
+            onScreen={(o) => void startScreen(o)}
+            onWhiteboard={() => void startShare({ kind: "board", name: "Whiteboard" })}
+            onPresent={(a) => void presentFile(a)}
+            onUpload={(f) => void uploadAndPresent(f)}
+            onClose={() => setShareOpen(false)}
+          />
         ) : null}
       </div>
 

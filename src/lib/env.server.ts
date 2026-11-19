@@ -44,3 +44,14 @@ export function getLiveKitConfig(): LiveKitConfig | null {
 export function liveKitHttpUrl(url: string): string {
   return url.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
 }
+
+/**
+ * Document conversion (PowerPoint/Word/Excel -> PDF) through a Gotenberg server
+ * (https://gotenberg.dev, LibreOffice). Optional: GOTENBERG_URL, and
+ * GOTENBERG_BASIC_AUTH as "user:password" if the server is protected.
+ */
+export function getConversionConfig(): { url: string; basicAuth: string | null } | null {
+  const url = serverVar("GOTENBERG_URL");
+  if (!url) return null;
+  return { url: url.replace(/\/+$/, ""), basicAuth: serverVar("GOTENBERG_BASIC_AUTH") ?? null };
+}

@@ -50,7 +50,10 @@ export const callModerateSchema = z.discriminatedUnion("action", [
   z.object({ callId: z.string().uuid(), action: z.literal("mute"), userId: z.string().uuid() }),
   z.object({ callId: z.string().uuid(), action: z.literal("remove"), userId: z.string().uuid() }),
   z.object({ callId: z.string().uuid(), action: z.literal("mute_all") }),
+  z.object({ callId: z.string().uuid(), action: z.literal("stop_share"), userId: z.string().uuid() }),
 ]);
+
+export const convertSchema = z.object({ attachmentId: z.string().uuid() });
 
 export const teamSchema = z.object({
   name: z.string().trim().min(1, "Team name is required").max(80),

@@ -58,6 +58,18 @@ export const POST = handler("calls.moderate", async (request: Request) => {
       .eq("user_id", input.userId)
       .is("left_at", null);
     affected = 1;
+  } else if (input.action === "stop_share") {
+    // Change presenter: end their screen share and clear what they're presenting (slides/whiteboard).
+    for (const p of targets) {
+      for (const t of p.tracks) {
+        if ((t.source === TrackSource.SCREEN_SHARE || t.source === TrackSource.SCREEN_SHARE_AUDIO) && !t.muted) {
+          await service.mutePublishedTrack(call.room_name, p.identity, t.sid, true);
+          affected++;
+        }
+      }
+      await service.updateParticipant(call.room_name, p.identity, { attributes: { share: "", pmode: "" } });
+      affected++;
+    }
   } else {
     for (const p of targets) {
       for (const t of p.tracks) {
@@ -72,7 +84,14 @@ export const POST = handler("calls.moderate", async (request: Request) => {
   const admin = requireServiceClient();
   await admin.from("audit_logs").insert({
     actor_id: caller.user.id,
-    action: input.action === "remove" ? "call.remove_participant" : input.action === "mute" ? "call.mute_participant" : "call.mute_all",
+    action:
+      input.action === "remove"
+        ? "call.remove_participant"
+        : input.action === "mute"
+          ? "call.mute_participant"
+          : input.action === "stop_share"
+            ? "call.stop_presenting"
+            : "call.mute_all",
     target_type: "call",
     target_id: call.id,
     metadata: { conversation_id: call.conversation_id, ...(input.action === "mute_all" ? {} : { user_id: input.userId }), affected },

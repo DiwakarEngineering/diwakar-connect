@@ -230,6 +230,7 @@ Calls use LiveKit (open source, WebRTC). The rest of the app works without it; c
 2. Copy the **WebSocket URL**, **API key** and **API secret** into `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` on the server (never `NEXT_PUBLIC_`). Locally, `npm run setup:livekit` asks for them (and for `SUPABASE_SERVICE_ROLE_KEY` if missing - the call endpoints need it) and writes `.env.local`; restart the server afterwards.
 3. Recommended: add a webhook in LiveKit → Settings → Webhooks pointing to `https://YOUR_APP/api/calls/webhook`. It keeps call history accurate when people close tabs without hanging up (the token endpoint also cleans up stale calls).
 4. Do not enable LiveKit Egress/recording - Diwakar Connect does not record calls.
+5. Optional, for presenting PowerPoint and previewing Word/Excel in meetings: run a [Gotenberg](https://gotenberg.dev) server (LibreOffice conversion) and set `GOTENBERG_URL` (and `GOTENBERG_BASIC_AUTH=user:password` if protected) on the server. Without it, PDFs present normally and other formats show a clear "conversion service isn't set up" message.
 
 Flow: the browser calls `POST /api/calls/token` → the server checks the caller is active and can post in the conversation (RLS), creates or joins the active `calls` row, and returns a 2-hour LiveKit token scoped to that call's room. `leave`, `end` (starter or admin) and `invite` endpoints manage the rest.
 

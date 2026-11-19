@@ -165,3 +165,35 @@ recovered, leave). Not yet tested end-to-end on the live project: ringing popup 
 
 Not in this delivery: background blur/effects, recording (needs LiveKit Egress + storage),
 lobby/admit, presenter modes, slides, whiteboard, scheduling (phases 3–4).
+
+### Phase 3 — Screen sharing and collaboration (first delivery)
+
+No database migration. Delivered:
+
+- **Share content drawer**: screen / window / tab through the browser's own picker, "Include
+  computer sound" (Chrome/Edge), presenter mode, Diwakar whiteboard, presentations and documents from
+  this conversation's files (most recent first) and Browse to upload (saved to the chat, so only its
+  members can open it).
+- **Presenter modes**: content only, side by side (presenter beside the content), picture in
+  picture; chosen by the presenter and shown the same way to everyone. Tiles move to a strip; a
+  presenting banner names the presenter with Stop sharing; the gallery returns when sharing ends.
+  Cancelled/blocked browser permission and sharing stopped from the browser bar are reported.
+- **Change presenter**: only one presenter at a time; the organizer/admins can stop someone else's
+  presenting (server-enforced through LiveKit, audit logged) or take over.
+- **Presentations**: PDF slides rendered in the browser (pdf.js), slide thumbnails, next/previous and
+  arrow keys, full screen, and the current slide synced for everyone including late joiners.
+  PowerPoint / Word / Excel are converted to PDF by a Gotenberg server (`GOTENBERG_URL`, optional
+  `GOTENBERG_BASIC_AUTH`); without it the app says the conversion service isn't set up.
+- **Control of the slides**: participants can request control; the presenter must Allow, sees who
+  has control, and can take it back at any time. (Full desktop remote control is not offered: it
+  needs an approved native helper app, which browsers cannot provide.)
+- **Whiteboard**: real-time drawing for everyone in the call; pen, highlighter, text, line, arrow,
+  rectangle, ellipse, eraser, colours and thickness; undo/redo of your own changes; clear limited to
+  the board owner and the organizer (with confirmation); late joiners receive the board; export PNG
+  or PDF; Save to chat.
+
+Tested in two browsers through a local LiveKit server: drawer, side-by-side screen share and stop,
+whiteboard strokes both ways, undo, attendee without Clear, late-joiner sync, PNG/PDF export, clear,
+PDF upload and presenting, slide sync, control request → allow → remote next slide → take back,
+stop presenting. Not tested here: PowerPoint conversion (needs a Gotenberg server) and the
+organizer's "stop their presenting" (needs the real LiveKit server API).
