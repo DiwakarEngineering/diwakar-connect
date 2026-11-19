@@ -288,6 +288,10 @@ Then add the `*.workers.dev` URL (or your custom domain) to Supabase Auth → UR
 
 Manual deploy from your machine: `npx wrangler login`, then `npm run cf:deploy`. Local Workers preview: `npm run cf:preview` (put local secrets in `.dev.vars`).
 
+### Mobile app (Android and iPhone)
+
+A native app for Android and iPhone lives in [`mobile/`](mobile/README.md) (Expo / React Native). It uses the same Supabase project and LiveKit calls as the website; the website's call endpoints accept the app's sign-in token (`Authorization: Bearer`).
+
 ### Android app (Google Play)
 
 The site is installable (web app manifest, icons, offline page) and can be published on Google Play as a Trusted Web Activity; see [docs/ANDROID.md](docs/ANDROID.md) for the step-by-step guide.

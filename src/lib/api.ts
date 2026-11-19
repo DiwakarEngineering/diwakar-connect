@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import type { ZodSchema } from "zod";
 import type { Enums } from "@/lib/database.types";
-import { getSupabaseServerClient, type ServerSupabase } from "@/lib/supabase/server";
+import { bearerToken, getSupabaseServerClient, getSupabaseTokenClient, type ServerSupabase } from "@/lib/supabase/server";
 import { getSupabaseAdminClient, type AdminSupabase } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
@@ -102,11 +102,15 @@ export type Caller = {
 
 /** Authenticated, active employee (validated with Supabase Auth, not just the cookie). */
 export async function requireActiveUser(request: Request): Promise<Caller> {
-  assertSameOrigin(request);
-  const supabase = await getSupabaseServerClient();
+  // The mobile app sends its access token; browsers use the session cookie.
+  // A bearer header is never attached automatically by a browser, so it needs
+  // no same-origin check (and native apps send no Origin).
+  const token = bearerToken(request);
+  if (!token) assertSameOrigin(request);
+  const supabase = token ? getSupabaseTokenClient(token) : await getSupabaseServerClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = token ? await supabase.auth.getUser(token) : await supabase.auth.getUser();
   if (!user) throw new ApiError("unauthenticated", "Your session has expired. Please sign in again.");
 
   const [{ data: profile }, { data: roleRow }] = await Promise.all([
