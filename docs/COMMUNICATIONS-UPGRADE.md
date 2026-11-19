@@ -132,3 +132,36 @@ with separate employee accounts):
 
 Still to do in Phase 1: GIFs (needs a GIF provider key), Word/Excel/PowerPoint previews (needs a
 conversion service), dark theme.
+
+### Phase 2 — Calling and meeting workspace (first delivery)
+
+Migration: `supabase/migrations/20261119000100_call_ringing.sql` (additive; apply before deploying).
+
+Delivered:
+
+- **Ringing**: `call_invites` (ringing → accepted / declined / missed), created by the database when a
+  direct/group call starts or someone is invited. Incoming-call popup on every page (caller photo,
+  name, audio/video, Accept, Decline, ringtone, 45 s timeout → missed call). Do not disturb: no popup.
+- **Outgoing**: "Calling …" screen with ringback tone and Cancel; shows Declined / No answer.
+- **Missed calls**: notification "Missed video call from …" when a ring times out or the call ends
+  unanswered.
+- **Meeting workspace**: dark layout with a top toolbar (participants, chat, raise hand, reactions,
+  more: gallery/speaker view, device settings, full screen, invite, end for everyone; camera,
+  microphone, share; red Leave with "end for everyone"). Gallery grid that resizes with the number of
+  people; speaker view with thumbnail strip; orange active-speaker border; name, microphone and
+  network-quality marks; avatar when the camera is off; presenting banner with Stop sharing.
+- **Participants panel**: count, search, invite, copy link, organizer / presenter / attendee, camera
+  and microphone state, raised hands, invited people with Ringing / Declined / No answer; organizer
+  and admins can mute one, mute all and remove (`/api/calls/moderate`, enforced by LiveKit, audit
+  logged).
+- **Meeting chat**: the call's own conversation beside the video; history stays in the chat.
+- Mobile app 1.2.0: Decline and ring timeout are reported to the caller.
+
+Tested: database rules (`test:db`, 66 checks); a real two-person call through a local LiveKit
+server with fake camera/microphone (live video both ways, raise hand, reactions, participants
+panel, speaker view, meeting chat, screen share start/stop, network drop → "Reconnecting" →
+recovered, leave). Not yet tested end-to-end on the live project: ringing popup / outgoing screen
+(they need the live database) and moderation (needs the real LiveKit server API).
+
+Not in this delivery: background blur/effects, recording (needs LiveKit Egress + storage),
+lobby/admit, presenter modes, slides, whiteboard, scheduling (phases 3–4).

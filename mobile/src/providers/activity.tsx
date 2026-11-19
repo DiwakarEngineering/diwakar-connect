@@ -108,6 +108,8 @@ export function ActivityProvider({ userId, dnd, children }: { userId: string; dn
           ringTimer.current = setTimeout(() => {
             stopRingtone();
             setIncoming(null);
+            // Record a missed call (needs the call-ringing migration; harmless without it).
+            if (n.call_id) void supabase.rpc("respond_to_call", { p_call_id: n.call_id, p_response: "missed" }).then(() => undefined, () => undefined);
           }, RING_FOR_MS);
         }
       })
@@ -153,6 +155,8 @@ export function ActivityProvider({ userId, dnd, children }: { userId: string; dn
     if (!incoming) return;
     stopRinging();
     void supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", incoming.notificationId);
+    // Tell the caller (their screen shows "Declined").
+    if (incoming.callId) void supabase.rpc("respond_to_call", { p_call_id: incoming.callId, p_response: "declined" }).then(() => undefined, () => undefined);
     setIncoming(null);
   }, [incoming, stopRinging]);
 

@@ -46,6 +46,12 @@ export const callInviteSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(20),
 });
 
+export const callModerateSchema = z.discriminatedUnion("action", [
+  z.object({ callId: z.string().uuid(), action: z.literal("mute"), userId: z.string().uuid() }),
+  z.object({ callId: z.string().uuid(), action: z.literal("remove"), userId: z.string().uuid() }),
+  z.object({ callId: z.string().uuid(), action: z.literal("mute_all") }),
+]);
+
 export const teamSchema = z.object({
   name: z.string().trim().min(1, "Team name is required").max(80),
   description: z.string().trim().max(500).optional(),

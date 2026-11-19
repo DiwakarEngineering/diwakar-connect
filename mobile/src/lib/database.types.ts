@@ -315,6 +315,24 @@ export type Database = {
         Update: { left_at?: string | null };
         Relationships: [];
       };
+      call_invites: {
+        Row: {
+          call_id: string;
+          user_id: string;
+          status: Database["public"]["Enums"]["call_invite_status"];
+          created_at: string;
+          responded_at: string | null;
+        };
+        // Written only by the server (service role) and database functions; RLS blocks clients.
+        Insert: {
+          call_id: string;
+          user_id: string;
+          status?: Database["public"]["Enums"]["call_invite_status"];
+          responded_at?: string | null;
+        };
+        Update: { status?: Database["public"]["Enums"]["call_invite_status"]; responded_at?: string | null };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           id: string;
@@ -391,6 +409,10 @@ export type Database = {
       };
       clear_conversation_history: { Args: { p_conversation_id: string }; Returns: string };
       mark_all_notifications_read: { Args: never; Returns: number };
+      respond_to_call: {
+        Args: { p_call_id: string; p_response: "declined" | "missed" };
+        Returns: Database["public"]["Enums"]["call_invite_status"] | null;
+      };
       pin_message: { Args: { p_message_id: string; p_pinned: boolean }; Returns: undefined };
       mark_conversations_delivered: { Args: never; Returns: undefined };
       find_group_conversation: { Args: { p_member_ids: string[] }; Returns: string | null };
@@ -529,6 +551,7 @@ export type Database = {
       notification_kind: "mention" | "reply" | "team_invite" | "call" | "system";
       call_status: "active" | "ended";
       call_media: "audio" | "video";
+      call_invite_status: "ringing" | "accepted" | "declined" | "missed";
       team_creation_policy: "admins" | "managers" | "everyone";
       message_kind: "user" | "system";
     };

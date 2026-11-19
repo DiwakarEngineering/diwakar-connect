@@ -114,6 +114,8 @@ export const POST = handler("calls.token", async (request: Request) => {
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    // Raised hand is a participant attribute the person sets on themselves.
+    canUpdateOwnMetadata: true,
   });
 
   logger.info("calls.token_issued", { user: caller.user.id, call: call.id });

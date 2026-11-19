@@ -2,14 +2,14 @@
   "expo": {
     "name": "Diwakar Connect",
     "slug": "diwakar-connect",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "diwakarconnect",
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.diwakarsolar.connect",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Diwakar Connect uses the camera for video calls and to send photos in chats.",
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.diwakarsolar.connect",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

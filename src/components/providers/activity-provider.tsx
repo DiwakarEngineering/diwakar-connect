@@ -155,14 +155,16 @@ export function ActivityProvider({ userId, children }: { userId: string; childre
           // Do not disturb: badges still update, but no pop-ups, sounds or desktop alerts.
           if (live.current.dnd) return;
           if (n.kind !== "call") playChime(n.kind === "mention" ? "mention" : "message");
-          const href = n.kind === "call" && n.conversation_id ? `/call/${n.conversation_id}` : null;
-          push({
-            tone: "info",
-            title: n.title,
-            description: n.body ?? undefined,
-            durationMs: n.kind === "call" ? 20_000 : undefined,
-            action: href ? { label: "Join call", onClick: () => router.push(href) } : undefined,
-          });
+          // Incoming calls get the ringing popup (IncomingCall) instead of a toast.
+          if (n.kind !== "call") {
+            const href = n.call_id && n.conversation_id ? `/chat/${n.conversation_id}` : null;
+            push({
+              tone: "info",
+              title: n.title,
+              description: n.body ?? undefined,
+              action: href ? { label: "Open chat", onClick: () => router.push(href) } : undefined,
+            });
+          }
           if (document.visibilityState === "hidden" && browserNotificationsEnabled()) {
             try {
               new Notification(n.title, { body: n.body ?? undefined, tag: n.id });

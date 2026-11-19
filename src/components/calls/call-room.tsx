@@ -17,18 +17,25 @@ import {
 } from "livekit-client";
 import {
   ArrowLeft,
+  ChevronDown,
+  Hand,
+  LayoutGrid,
+  Maximize,
+  MessageSquare,
   Mic,
   MicOff,
+  Minimize,
   MonitorUp,
+  MoreHorizontal,
   PhoneOff,
   Settings,
+  SmilePlus,
   UserPlus,
   Users,
   Video,
   VideoOff,
   Volume2,
   WifiOff,
-  X,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -45,6 +52,10 @@ import { readApiError } from "@/lib/errors";
 import { isDemoMode } from "@/lib/env";
 import { useCallConfig } from "./use-call-config";
 import { AudioTrack, ParticipantTile, VideoElement } from "./participant-tile";
+import { MeetingChat } from "./meeting-chat";
+import { OutgoingRing, ParticipantsPanel, handRaised, useRings } from "./meeting-panels";
+import { Menu } from "@/components/ui/menu";
+import { startRingback, stopRingtone } from "@/lib/sounds";
 import { describeMediaError, supportsOutputSelection, supportsScreenShare } from "./media-errors";
 
 type Phase =
@@ -55,6 +66,8 @@ type Phase =
   | { kind: "ended"; message: string }
   | { kind: "unconfigured"; message: string }
   | { kind: "error"; message: string };
+
+const REACTIONS = ["👍", "❤️", "😂", "👏", "🎉", "😮"];
 
 type CallInfo = { id: string; conversationId: string; media: "audio" | "video"; startedAt: string; startedBy: string | null };
 type Devices = { audioinput: MediaDeviceInfo[]; videoinput: MediaDeviceInfo[]; audiooutput: MediaDeviceInfo[] };
@@ -128,6 +141,13 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const callRef = useRef<CallInfo | null>(null);
   const leavingRef = useRef(false);
   const [call, setCall] = useState<CallInfo | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [layout, setLayout] = useState<"gallery" | "speaker">("gallery");
+  const [reactions, setReactions] = useState<{ id: string; identity: string; emoji: string }[]>([]);
+  const [reactOpen, setReactOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [someoneJoined, setSomeoneJoined] = useState(false);
+  const rings = useRings(call?.id ?? null);
   const elapsed = useElapsed(phase.kind === "connected" || phase.kind === "reconnecting" ? (call?.startedAt ?? null) : null);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -225,15 +245,83 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     };
   }, []);
 
+  const addReaction = useCallback((identity: string, emoji: string) => {
+    const id = `${identity}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setReactions((list) => [...list.slice(-20), { id, identity, emoji }]);
+    window.setTimeout(() => setReactions((list) => list.filter((r) => r.id !== id)), 3500);
+  }, []);
+
+  async function sendReaction(emoji: string) {
+    setReactOpen(false);
+    const room = roomRef.current;
+    if (!room) return;
+    addReaction(room.localParticipant.identity, emoji);
+    try {
+      await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({ emoji })), { reliable: true, topic: "reactions" });
+    } catch {
+      push({ tone: "error", title: "Reaction not sent" });
+    }
+  }
+
+  async function toggleHand() {
+    const room = roomRef.current;
+    if (!room) return;
+    const up = handRaised(room.localParticipant);
+    try {
+      await room.localParticipant.setAttributes({ hand: up ? "" : "up" });
+    } catch {
+      push({ tone: "error", title: up ? "Couldn't lower your hand" : "Couldn't raise your hand" });
+    }
+    bump();
+  }
+
+  async function moderate(action: "mute" | "remove" | "mute_all", userId?: string) {
+    if (!callRef.current) return;
+    const res = await fetch("/api/calls/moderate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callId: callRef.current.id, action, ...(userId ? { userId } : {}) }),
+    });
+    if (!res.ok) {
+      push({ tone: "error", title: "Action failed", description: (await readApiError(res)).message });
+      return;
+    }
+    push({ tone: "success", title: action === "remove" ? "Removed from the meeting" : action === "mute" ? "Muted" : "Everyone else is muted" });
+  }
+
+  function copyLink() {
+    const url = `${window.location.origin}/call/${conversationId}`;
+    void navigator.clipboard
+      ?.writeText(url)
+      .then(() => push({ tone: "success", title: "Meeting link copied", description: "Only people with access to this conversation can join." }))
+      .catch(() => push({ tone: "error", title: "Couldn't copy the link" }));
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      push({ tone: "error", title: "Full screen isn't available here" });
+    }
+  }
+
   async function join() {
     setPhase({ kind: "joining" });
     let res: Response;
     try {
-      res = await fetch("/api/calls/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, media: camOn ? "video" : "audio" }),
-      });
+      res = isDemoMode()
+        ? // Local preview with a LiveKit dev server (see README): no Supabase server in demo mode.
+          await fetch("/api/demo/call-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identity: session.userId, name: session.profile.display_name, conversationId, media: camOn ? "video" : "audio" }),
+          })
+        : await fetch("/api/calls/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ conversationId, media: camOn ? "video" : "audio" }),
+          });
     } catch {
       setPhase({ kind: "error", message: "Can't reach the server. Check your connection and try again." });
       return;
@@ -267,6 +355,17 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
       .on(RoomEvent.LocalTrackPublished, bump)
       .on(RoomEvent.LocalTrackUnpublished, bump)
       .on(RoomEvent.ActiveSpeakersChanged, bump)
+      .on(RoomEvent.ParticipantAttributesChanged, bump)
+      .on(RoomEvent.ConnectionQualityChanged, bump)
+      .on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: Participant, _kind?: unknown, topic?: string) => {
+        if (topic !== "reactions" || !participant) return;
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload)) as { emoji?: string };
+          if (msg.emoji && REACTIONS.includes(msg.emoji)) addReaction(participant.identity, msg.emoji);
+        } catch {
+          // Ignore malformed data messages.
+        }
+      })
       .on(RoomEvent.Reconnecting, () => setPhase({ kind: "reconnecting" }))
       .on(RoomEvent.SignalReconnecting, () => setPhase({ kind: "reconnecting" }))
       .on(RoomEvent.Reconnected, () => setPhase({ kind: "connected" }))
@@ -409,7 +508,7 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     if (!room) return [];
     return [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
   }, [room, version]);
-  const people = usePeopleById(participants.map((p) => p.identity));
+  const people = usePeopleById([...participants.map((p) => p.identity), ...rings.map((r) => r.user_id)]);
   const nameOf = (p: Participant) => people.get(p.identity)?.display_name ?? (p.name || "Guest");
   const screenSharer = participants.find((p) => p.isScreenShareEnabled);
   const isLocalSharing = !!room?.localParticipant.isScreenShareEnabled;
@@ -417,6 +516,35 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const title = meta?.title ?? "Call";
   const backHref =
     meta?.kind === "channel" && meta.team && meta.channel ? `/teams/${meta.team.id}/${meta.channel.id}` : `/chat/${conversationId}`;
+
+  // Track whether anyone else has ever joined (outgoing-ring screen until then).
+  const remoteCount = participants.length - (room ? 1 : 0);
+  useEffect(() => {
+    if (remoteCount > 0) setSomeoneJoined(true);
+  }, [remoteCount]);
+  const showRinging = inCall && !someoneJoined && remoteCount === 0 && call?.startedBy === session.userId && rings.length > 0;
+  const stillRinging = showRinging && rings.some((r) => r.status === "ringing");
+  useEffect(() => {
+    if (!stillRinging) return;
+    startRingback();
+    return () => stopRingtone();
+  }, [stillRinging]);
+
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Accepting an incoming call (?answer=1) joins straight away.
+  const autoJoined = useRef(false);
+  useEffect(() => {
+    if (autoJoined.current || phase.kind !== "lobby" || config.status !== "ready" || !config.providerConfigured || !meta?.canPost) return;
+    if (new URLSearchParams(window.location.search).get("answer") !== "1") return;
+    autoJoined.current = true;
+    void join();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- join reads current state; runs once
+  }, [config, meta?.canPost, phase.kind]);
 
   // --- Non-room states ------------------------------------------------------
   if (phase.kind === "unconfigured" || phase.kind === "error" || phase.kind === "ended") {
@@ -544,40 +672,152 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         .map((s) => p.getTrackPublication(s)?.track)
         .filter((t): t is NonNullable<typeof t> => !!t),
     );
-  const gridCols =
-    participants.length <= 1 ? "grid-cols-1" : participants.length <= 4 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
+  const reactionsFor = (identity: string) => reactions.filter((r) => r.identity === identity);
+  const local = room?.localParticipant;
+  const myHand = !!local && handRaised(local);
+  // Speaker view: the most recent active speaker (not me if possible), else the first other person.
+  const speakerOrder = room?.activeSpeakers ?? [];
+  const featured =
+    speakerOrder.find((p) => p !== local) ?? participants.find((p) => p !== local) ?? local ?? null;
+  const n = participants.length;
+  const gridCols = n <= 1 ? "grid-cols-1" : n <= 4 ? "grid-cols-1 sm:grid-cols-2" : n <= 9 ? "grid-cols-2 lg:grid-cols-3" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+  const tile = (p: Participant, opts: { compact?: boolean; large?: boolean } = {}) => (
+    <ParticipantTile
+      key={p.identity}
+      participant={p}
+      source={Track.Source.Camera}
+      name={nameOf(p)}
+      avatarPath={people.get(p.identity)?.avatar_path}
+      isLocal={p === local}
+      version={version}
+      reactions={reactionsFor(p.identity)}
+      {...opts}
+    />
+  );
+  const canModerate = !!call && (call.startedBy === session.userId || isAdmin);
+  const tb = (active?: boolean) =>
+    clsx(
+      "flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition-colors",
+      active ? "bg-brand-500/20 text-brand-300" : "text-ink-200 hover:bg-ink-800 hover:text-white",
+    );
+  const moreItems = [
+    {
+      label: layout === "gallery" ? "Speaker view" : "Gallery view",
+      icon: <LayoutGrid className="h-4 w-4" />,
+      onSelect: () => setLayout((l) => (l === "gallery" ? "speaker" : "gallery")),
+    },
+    { label: "Device settings", icon: <Settings className="h-4 w-4" />, onSelect: () => setSettingsOpen(true) },
+    { label: fullscreen ? "Exit full screen" : "Full screen", icon: fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />, onSelect: () => void toggleFullscreen() },
+    ...(meta?.kind !== "direct" ? [{ label: "Invite people", icon: <UserPlus className="h-4 w-4" />, onSelect: () => setInviteOpen(true) }] : []),
+    ...(canEndForAll
+      ? [{ type: "separator" as const }, { label: "End meeting for everyone", icon: <PhoneOff className="h-4 w-4" />, danger: true, onSelect: () => void endForAll() }]
+      : []),
+  ];
+
+  const mediaControls = (
+    <>
+      <ControlButton
+        label={camOn ? "Turn camera off" : "Turn camera on"}
+        active={camOn}
+        busy={busyControl === "camera"}
+        onClick={() => void toggle("camera")}
+        icon={camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+      />
+      <ControlButton
+        label={micOn ? "Mute microphone" : "Unmute microphone"}
+        active={micOn}
+        busy={busyControl === "mic"}
+        onClick={() => void toggle("mic")}
+        icon={micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+      />
+      {supportsScreenShare() ? (
+        <ControlButton
+          label={isLocalSharing ? "Stop sharing" : "Share screen"}
+          active={!isLocalSharing}
+          highlight={isLocalSharing}
+          busy={busyControl === "screen"}
+          disabled={!!screenSharer && !isLocalSharing}
+          onClick={() => void toggle("screen")}
+          icon={<MonitorUp className="h-5 w-5" />}
+          className="hidden sm:flex"
+        />
+      ) : null}
+    </>
+  );
 
   return (
-    <div className="flex h-dvh flex-col text-white">
-      <header className="flex h-14 shrink-0 items-center gap-3 px-4">
+    <div className="flex h-dvh flex-col bg-ink-950 text-white">
+      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-white/5 px-3 md:px-4">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold">{title}</h1>
           <p className="text-xs text-ink-300" role="status" aria-live="polite">
             {phase.kind === "reconnecting" ? (
-              <span className="inline-flex items-center gap-1.5 text-warning-50">
-                <Spinner className="h-3 w-3" label="" /> Reconnecting...
+              <span className="inline-flex items-center gap-1.5 text-brand-300">
+                <Spinner className="h-3 w-3" label="" /> Network interrupted. Reconnecting...
               </span>
             ) : (
               <>
                 <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-success-600" aria-hidden="true" />
-                Live · {elapsed} · {participants.length} {participants.length === 1 ? "person" : "people"}
+                <span className="tabular-nums">{elapsed}</span> · {n} {n === 1 ? "person" : "people"}
               </>
             )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPanelOpen((v) => !v)}
-          aria-pressed={panelOpen}
-          className="flex h-10 items-center gap-2 rounded-xl px-3 text-sm text-ink-200 hover:bg-ink-800"
-        >
-          <Users className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Participants</span>
-        </button>
+
+        <nav aria-label="Meeting tools" className="flex items-center gap-0.5">
+          <button type="button" onClick={() => { setPanelOpen((v) => !v); setChatOpen(false); }} aria-pressed={panelOpen} className={tb(panelOpen)} title="Participants" aria-label={`Participants (${n})`}>
+            <Users className="h-5 w-5" aria-hidden="true" />
+            <span className="hidden text-xs md:inline" aria-hidden="true">{n}</span>
+          </button>
+          {meta ? (
+            <button type="button" onClick={() => { setChatOpen((v) => !v); setPanelOpen(false); }} aria-pressed={chatOpen} className={tb(chatOpen)} title="Meeting chat" aria-label="Meeting chat">
+              <MessageSquare className="h-5 w-5" aria-hidden="true" />
+            </button>
+          ) : null}
+          <button type="button" onClick={() => void toggleHand()} aria-pressed={myHand} className={clsx(tb(myHand), "hidden sm:flex")} title={myHand ? "Lower hand" : "Raise hand"} aria-label={myHand ? "Lower hand" : "Raise hand"}>
+            <Hand className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div className="relative hidden sm:block">
+            <button type="button" onClick={() => setReactOpen((v) => !v)} aria-expanded={reactOpen} aria-haspopup="true" className={tb(reactOpen)} title="React" aria-label="React">
+              <SmilePlus className="h-5 w-5" aria-hidden="true" />
+            </button>
+            {reactOpen ? (
+              <div role="menu" aria-label="Reactions" className="absolute right-0 top-full z-50 mt-2 flex gap-1 rounded-2xl bg-ink-800 p-1.5 shadow-pop ring-1 ring-white/10">
+                {REACTIONS.map((e) => (
+                  <button key={e} type="button" role="menuitem" onClick={() => void sendReaction(e)} className="flex h-10 w-10 items-center justify-center rounded-xl text-2xl hover:bg-ink-700" aria-label={`React ${e}`}>
+                    {e}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <Menu label="More options" items={moreItems} trigger={<MoreHorizontal className="h-5 w-5" aria-hidden="true" />} triggerClassName={tb(false)} />
+          <span className="mx-1 hidden h-6 w-px bg-white/10 md:block" aria-hidden="true" />
+          <div className="hidden items-center gap-1.5 md:flex">{mediaControls}</div>
+          <button
+            type="button"
+            onClick={() => void leave()}
+            className="ml-1 hidden h-10 items-center gap-2 rounded-xl bg-danger-600 px-4 text-sm font-semibold hover:bg-danger-700 md:flex"
+          >
+            <PhoneOff className="h-4 w-4" aria-hidden="true" />
+            Leave
+          </button>
+          {canEndForAll ? (
+            <Menu
+              label="Leave options"
+              items={[
+                { label: "Leave (others stay)", icon: <PhoneOff className="h-4 w-4" />, onSelect: () => void leave() },
+                { label: "End meeting for everyone", icon: <PhoneOff className="h-4 w-4" />, danger: true, onSelect: () => void endForAll() },
+              ]}
+              trigger={<ChevronDown className="h-4 w-4" aria-hidden="true" />}
+              triggerClassName="-ml-1 hidden h-10 w-8 items-center justify-center rounded-r-xl bg-danger-600 hover:bg-danger-700 md:flex"
+            />
+          ) : null}
+        </nav>
       </header>
 
       {!canPlayAudio ? (
-        <div className="mx-4 mb-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600 px-4 py-2 text-sm">
+        <div className="mx-4 mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600 px-4 py-2 text-sm">
           Your browser blocked call audio.
           <button type="button" onClick={() => void room?.startAudio()} className="rounded-lg bg-white px-3 py-1 font-semibold text-brand-700">
             <Volume2 className="mr-1 inline h-4 w-4" aria-hidden="true" />
@@ -586,133 +826,94 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 gap-3 px-3 pb-3">
+      {screenSharer ? (
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600/15 px-4 py-2 text-sm text-brand-100 ring-1 ring-brand-500/30" role="status">
+          <span className="flex min-w-0 items-center gap-2">
+            <MonitorUp className="h-4 w-4 shrink-0 text-brand-300" aria-hidden="true" />
+            <span className="truncate">{isLocalSharing ? "You're sharing your screen" : `${nameOf(screenSharer)} is presenting`}</span>
+          </span>
+          {isLocalSharing ? (
+            <button type="button" onClick={() => void toggle("screen")} className="shrink-0 rounded-lg bg-danger-600 px-3 py-1 text-xs font-semibold text-white hover:bg-danger-700">
+              Stop sharing
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 gap-3 p-3">
         <main id="main" className="min-h-0 flex-1 overflow-y-auto">
-          {screenSharer ? (
+          {showRinging ? (
+            <OutgoingRing rings={rings} people={people} onCancel={() => void (canEndForAll ? endForAll() : leave())} />
+          ) : screenSharer ? (
             <div className="flex h-full flex-col gap-3">
+              <div className="flex shrink-0 gap-3 overflow-x-auto pb-1">
+                {participants.map((p) => (
+                  <div key={p.identity} className="w-40 shrink-0">
+                    {tile(p, { compact: true })}
+                  </div>
+                ))}
+              </div>
               <div className="min-h-0 flex-1">
                 <ParticipantTile
                   participant={screenSharer}
                   source={Track.Source.ScreenShare}
                   name={nameOf(screenSharer)}
-                  isLocal={screenSharer === room?.localParticipant}
+                  isLocal={screenSharer === local}
                   version={version}
                   large
                 />
               </div>
-              <div className="flex shrink-0 gap-3 overflow-x-auto">
-                {participants.map((p) => (
-                  <div key={p.identity} className="w-48 shrink-0">
-                    <ParticipantTile
-                      participant={p}
-                      source={Track.Source.Camera}
-                      name={nameOf(p)}
-                      avatarPath={people.get(p.identity)?.avatar_path}
-                      isLocal={p === room?.localParticipant}
-                      version={version}
-                    />
-                  </div>
-                ))}
+            </div>
+          ) : layout === "speaker" && featured && n > 1 ? (
+            <div className="flex h-full flex-col gap-3">
+              <div className="flex shrink-0 gap-3 overflow-x-auto pb-1">
+                {participants
+                  .filter((p) => p !== featured)
+                  .map((p) => (
+                    <div key={p.identity} className="w-40 shrink-0">
+                      {tile(p, { compact: true })}
+                    </div>
+                  ))}
               </div>
+              <div className="min-h-0 flex-1">{tile(featured, { large: true })}</div>
             </div>
           ) : (
-            <div className={clsx("mx-auto grid h-full max-w-6xl content-center gap-3", gridCols)}>
-              {participants.map((p) => (
-                <ParticipantTile
-                  key={p.identity}
-                  participant={p}
-                  source={Track.Source.Camera}
-                  name={nameOf(p)}
-                  avatarPath={people.get(p.identity)?.avatar_path}
-                  isLocal={p === room?.localParticipant}
-                  version={version}
-                />
-              ))}
-              {participants.length === 1 ? (
-                <p className="text-center text-sm text-ink-300">Waiting for others to join...</p>
-              ) : null}
+            <div className={clsx("mx-auto grid h-full max-w-7xl content-center gap-3", gridCols)}>
+              {participants.map((p) => tile(p))}
+              {n === 1 ? <p className="text-center text-sm text-ink-300">Waiting for others to join...</p> : null}
             </div>
           )}
         </main>
 
-        {panelOpen ? (
-          <aside aria-label="Participants" className="fixed inset-0 z-40 flex flex-col bg-ink-900 md:static md:w-80 md:rounded-2xl">
-            <div className="flex h-14 items-center justify-between border-b border-ink-700 px-4">
-              <h2 className="text-sm font-semibold">Participants ({participants.length})</h2>
-              <button type="button" onClick={() => setPanelOpen(false)} className="rounded-lg p-2 text-ink-300 hover:bg-ink-800" aria-label="Close participants">
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-            <ul className="flex-1 overflow-y-auto py-2">
-              {participants.map((p) => (
-                <li key={p.identity} className="flex items-center gap-3 px-4 py-2">
-                  <Avatar name={nameOf(p)} path={people.get(p.identity)?.avatar_path} userId={p.identity} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {nameOf(p)}
-                    {p === room?.localParticipant ? " (you)" : ""}
-                  </span>
-                  {p.isScreenShareEnabled ? <MonitorUp className="h-4 w-4 text-brand-300" aria-label="Sharing screen" /> : null}
-                  {p.isMicrophoneEnabled ? <Mic className="h-4 w-4 text-ink-300" aria-label="Mic on" /> : <MicOff className="h-4 w-4 text-danger-50" aria-label="Muted" />}
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-ink-700 p-3">
-              <Button className="w-full" onClick={() => setInviteOpen(true)}>
-                <UserPlus className="h-4 w-4" aria-hidden="true" />
-                Invite people
-              </Button>
-            </div>
-          </aside>
+        {panelOpen && local ? (
+          <ParticipantsPanel
+            participants={participants}
+            localIdentity={local.identity}
+            organizerId={call?.startedBy ?? null}
+            people={people}
+            rings={rings}
+            canModerate={canModerate}
+            canInvite={meta?.kind !== "direct"}
+            onInvite={() => setInviteOpen(true)}
+            onCopyLink={copyLink}
+            onMute={(id) => void moderate("mute", id)}
+            onRemove={(id) => void moderate("remove", id)}
+            onMuteAll={() => void moderate("mute_all")}
+            onClose={() => setPanelOpen(false)}
+          />
+        ) : chatOpen && meta ? (
+          <MeetingChat meta={meta} onClose={() => setChatOpen(false)} />
         ) : null}
       </div>
 
-      <footer className="pb-safe flex shrink-0 items-center justify-center gap-2 px-3 pb-4 pt-1 sm:gap-3">
-        <ControlButton
-          label={micOn ? "Mute" : "Unmute"}
-          active={micOn}
-          busy={busyControl === "mic"}
-          onClick={() => void toggle("mic")}
-          icon={micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-        />
-        <ControlButton
-          label={camOn ? "Stop video" : "Start video"}
-          active={camOn}
-          busy={busyControl === "camera"}
-          onClick={() => void toggle("camera")}
-          icon={camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-        />
-        {supportsScreenShare() ? (
-          <ControlButton
-            label={isLocalSharing ? "Stop sharing" : "Share screen"}
-            active={!isLocalSharing}
-            highlight={isLocalSharing}
-            busy={busyControl === "screen"}
-            disabled={!!screenSharer && !isLocalSharing}
-            onClick={() => void toggle("screen")}
-            icon={<MonitorUp className="h-5 w-5" />}
-            className="hidden sm:flex"
-          />
-        ) : null}
-        <ControlButton label="Devices" active onClick={() => setSettingsOpen(true)} icon={<Settings className="h-5 w-5" />} />
-        <ControlButton label="Invite" active onClick={() => setInviteOpen(true)} icon={<UserPlus className="h-5 w-5" />} className="hidden sm:flex" />
-        <button
-          type="button"
-          onClick={() => void leave()}
-          className="flex h-12 items-center gap-2 rounded-full bg-danger-600 px-5 text-sm font-semibold hover:bg-danger-700"
-        >
+      {/* Phones and small tablets: media controls at the bottom, within thumb reach. */}
+      <footer className="pb-safe flex shrink-0 items-center justify-center gap-2 px-3 pb-4 pt-1 md:hidden">
+        {mediaControls}
+        <ControlButton label={myHand ? "Lower hand" : "Raise hand"} active highlight={myHand} onClick={() => void toggleHand()} icon={<Hand className="h-5 w-5" />} />
+        <button type="button" onClick={() => void leave()} className="flex h-12 items-center gap-2 rounded-full bg-danger-600 px-5 text-sm font-semibold hover:bg-danger-700">
           <PhoneOff className="h-5 w-5" aria-hidden="true" />
           Leave
         </button>
-        {canEndForAll ? (
-          <button
-            type="button"
-            onClick={() => void endForAll()}
-            disabled={busyControl === "end"}
-            className="hidden h-12 rounded-full border border-danger-600 px-4 text-sm font-semibold text-danger-50 hover:bg-danger-600/20 md:block"
-          >
-            End for all
-          </button>
-        ) : null}
       </footer>
 
       <div className="hidden" aria-hidden="true">

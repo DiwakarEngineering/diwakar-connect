@@ -73,3 +73,44 @@ export function primeAudioOnInteraction() {
   window.addEventListener("keydown", unlock);
   return unlock;
 }
+
+let ringTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Incoming-call ringtone: a two-tone ring every 2.5 s until stopped. Rings
+ * even when message sounds are off (it's a call), but not before the person
+ * has interacted with the page (browser autoplay rules).
+ */
+export function startRingtone() {
+  stopRingtone();
+  const ring = () => {
+    const c = audio();
+    if (!c || c.state !== "running") return;
+    const t = c.currentTime + 0.01;
+    tone(c, 784, t, 0.42, 0.12);
+    tone(c, 988, t, 0.42, 0.08);
+    tone(c, 784, t + 0.55, 0.42, 0.12);
+    tone(c, 988, t + 0.55, 0.42, 0.08);
+  };
+  ring();
+  ringTimer = setInterval(ring, 2500);
+}
+
+export function stopRingtone() {
+  if (ringTimer) clearInterval(ringTimer);
+  ringTimer = null;
+}
+
+/** Short "ringing" tone for the caller (outgoing call). */
+export function startRingback() {
+  stopRingtone();
+  const ring = () => {
+    const c = audio();
+    if (!c || c.state !== "running") return;
+    const t = c.currentTime + 0.01;
+    tone(c, 440, t, 1.2, 0.05);
+    tone(c, 480, t, 1.2, 0.05);
+  };
+  ring();
+  ringTimer = setInterval(ring, 4000);
+}

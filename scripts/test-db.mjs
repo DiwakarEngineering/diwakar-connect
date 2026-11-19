@@ -633,6 +633,62 @@ async function main() {
     assert(hidden.length === 0, "mallory sees call");
   });
 
+  console.log("\nCall ringing");
+
+  await check("a new direct call rings the other member only", async () => {
+    const call = await service(({ one }) =>
+      one("insert into public.calls (conversation_id, started_by, room_name, media) values ($1, $2, 'ring-1', 'video') returning id", [dm, alice]),
+    );
+    const forBob = await as(bob, ({ q }) => q("select status from public.call_invites where call_id = $1 and user_id = $2", [call.id, bob]));
+    assert(forBob.length === 1 && forBob[0].status === "ringing", "bob is not ringing");
+    const forAlice = await as(alice, ({ q }) => q("select user_id from public.call_invites where call_id = $1", [call.id]));
+    assert(forAlice.length === 1 && forAlice[0].user_id === bob, "caller can't see who is ringing, or rang herself");
+    const forMallory = await as(mallory, ({ q }) => q("select 1 from public.call_invites where call_id = $1", [call.id]));
+    assert(forMallory.length === 0, "outsider sees the ring");
+    // Bob declines; the caller sees it.
+    const res = await as(bob, ({ one }) => one("select public.respond_to_call($1, 'declined') as s", [call.id]));
+    assert(res.s === "declined", `respond returned ${res.s}`);
+    const seen = await as(alice, ({ one }) => one("select status from public.call_invites where call_id = $1", [call.id]));
+    assert(seen.status === "declined", "caller doesn't see the decline");
+    // No update policy: a direct write affects no rows.
+    await as(bob, ({ q }) => q("update public.call_invites set status = 'accepted' where call_id = $1", [call.id]));
+    const still = await rows("select status from public.call_invites where call_id = $1", [call.id]);
+    assert(still[0].status === "declined", "direct update changed the ring");
+    await service(({ q }) => q("update public.calls set status = 'ended', ended_at = now(), ended_by = $2 where id = $1", [call.id, alice]));
+  });
+
+  await check("joining answers the ring; unanswered rings become missed calls with a notification", async () => {
+    const g = (await as(alice, ({ one }) => one("select public.create_group_conversation($1, 'Ring test') as id", [[bob, manager]]))).id;
+    const call = await service(({ one }) =>
+      one("insert into public.calls (conversation_id, started_by, room_name, media) values ($1, $2, 'ring-2', 'audio') returning id", [g, alice]),
+    );
+    await service(({ q }) => q("insert into public.call_participants (call_id, user_id) values ($1, $2)", [call.id, bob]));
+    await service(({ q }) => q("update public.calls set status = 'ended', ended_at = now(), ended_by = $2 where id = $1", [call.id, alice]));
+    const r = await rows("select user_id, status from public.call_invites where call_id = $1 order by user_id", [call.id]);
+    const byUser = Object.fromEntries(r.map((x) => [x.user_id, x.status]));
+    assert(byUser[bob] === "accepted", `bob: ${byUser[bob]}`);
+    assert(byUser[manager] === "missed", `manager: ${byUser[manager]}`);
+    const n = await as(manager, ({ q }) => q("select title from public.notifications where call_id = $1 and kind = 'system'", [call.id]));
+    assert(n.length === 1 && /^Missed audio call from Alice/.test(n[0].title), `missed notification: ${JSON.stringify(n)}`);
+    const nb = await as(bob, ({ q }) => q("select 1 from public.notifications where call_id = $1 and kind = 'system'", [call.id]));
+    assert(nb.length === 0, "bob joined but got a missed-call notice");
+  });
+
+  await check("ring timeout records a missed call; respond_to_call validates input", async () => {
+    const call = await service(({ one }) =>
+      one("insert into public.calls (conversation_id, started_by, room_name, media) values ($1, $2, 'ring-3', 'video') returning id", [dm, bob]),
+    );
+    const res = await as(alice, ({ one }) => one("select public.respond_to_call($1, 'missed') as s", [call.id]));
+    assert(res.s === "missed", `got ${res.s}`);
+    const n = await as(alice, ({ q }) => q("select 1 from public.notifications where call_id = $1 and kind = 'system'", [call.id]));
+    assert(n.length === 1, "no missed notification on timeout");
+    await expectError(as(alice, ({ q }) => q("select public.respond_to_call($1, 'accepted')", [call.id])), /declined or missed/);
+    await expectError(as(alice, ({ q }) => q("select public.notify_missed_call($1, $2)", [call.id, alice])), /permission denied/);
+    await service(({ q }) => q("update public.calls set status = 'ended', ended_at = now(), ended_by = $2 where id = $1", [call.id, bob]));
+    const again = await as(alice, ({ q }) => q("select 1 from public.notifications where call_id = $1 and kind = 'system'", [call.id]));
+    assert(again.length === 1, "duplicate missed notification after the call ended");
+  });
+
   console.log("\nAdministration");
 
   await check("only admins change organization settings", async () => {

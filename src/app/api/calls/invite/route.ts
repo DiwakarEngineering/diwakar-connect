@@ -54,6 +54,13 @@ export const POST = handler("calls.invite", async (request: Request) => {
   }
 
   if (invited.length > 0) {
+    // Ring them (incoming-call popup) as well as notifying.
+    await admin
+      .from("call_invites")
+      .upsert(
+        invited.map((userId) => ({ call_id: call.id, user_id: userId, status: "ringing" as const, responded_at: null })),
+        { onConflict: "call_id,user_id" },
+      );
     await admin.from("notifications").insert(
       invited.map((userId) => ({
         user_id: userId,

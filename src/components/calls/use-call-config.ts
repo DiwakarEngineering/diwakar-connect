@@ -13,8 +13,10 @@ export type CallConfig =
 let cached: Promise<CallConfig> | null = null;
 
 function fetchConfig(): Promise<CallConfig> {
-  // Demo mode has no call server: say so instead of pretending.
-  if (isDemoMode()) return Promise.resolve({ status: "ready", providerConfigured: false, enabledByOrganization: true });
+  // Demo mode has no call server unless a local LiveKit dev server is configured for testing.
+  if (isDemoMode()) {
+    return Promise.resolve({ status: "ready", providerConfigured: !!process.env.NEXT_PUBLIC_DEMO_LIVEKIT_URL, enabledByOrganization: true });
+  }
   cached ??= fetch("/api/calls/config", { cache: "no-store" })
     .then(async (res) => {
       if (!res.ok) return { status: "error" } as const;
