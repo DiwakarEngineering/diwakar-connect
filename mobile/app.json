@@ -15,7 +15,10 @@
         "NSCameraUsageDescription": "Diwakar Connect uses the camera for video calls and to send photos in chats.",
         "NSMicrophoneUsageDescription": "Diwakar Connect uses the microphone for calls and voice messages.",
         "NSPhotoLibraryUsageDescription": "Diwakar Connect lets you send photos and videos from your library in chats.",
-        "UIBackgroundModes": ["audio", "voip"],
+        "UIBackgroundModes": [
+          "audio",
+          "voip"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -36,7 +39,12 @@
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.WAKE_LOCK"
       ],
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "output": "single",
@@ -66,9 +74,23 @@
           "cameraPermission": "Diwakar Connect uses the camera for video calls and to send photos in chats."
         }
       ],
-      ["@livekit/react-native-expo-plugin", { "android": { "audioType": "communication" } }],
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication"
+          }
+        }
+      ],
       "@config-plugins/react-native-webrtc",
-      ["expo-build-properties", { "android": { "minSdkVersion": 24 } }]
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24
+          }
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://vnirohyvgppeikjgjiot.supabase.co",
