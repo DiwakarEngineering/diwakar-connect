@@ -148,7 +148,7 @@ npm run demo
 
 Opens on http://localhost:3000 with the staff accounts listed in `DEMO-LOGINS.md`.
 
-**Testing calls locally.** Demo mode has no media server, but you can point it at LiveKit's development server: run `livekit-server --dev --node-ip 127.0.0.1` (https://docs.livekit.io/home/self-hosting/local/), then `NEXT_PUBLIC_DEMO_LIVEKIT_URL=ws://localhost:7880 npm run demo`. Everyone in the local preview joins one shared test room (real WebRTC media). The demo token route only works in demo mode with a localhost LiveKit URL. That file and `supabase/demo/seed.sql` are generated from the staff CSV and are not committed (they hold personal emails and starting passwords): set `STAFF_PASSWORD` and `ADMIN_PASSWORD` in `.env.local`, then run `node scripts/import-employees.mjs path/to/employees.csv`. Demo mode runs a real PostgreSQL (PGlite, WebAssembly) **inside the browser**, built from the same `supabase/migrations` plus `supabase/demo/*.sql`, so the actual RLS policies, triggers and RPCs decide what each user sees. `src/lib/demo/` emulates the parts of Supabase Auth, Storage and Realtime the app uses, and the admin API rules. Data stays in that browser; calls are unavailable (no media server); no emails are sent. It is enabled only by `NEXT_PUBLIC_DEMO_MODE=true`, which `npm run demo` sets - never set it in a deployment.
+**Testing calls locally.** Demo mode has no media server, but you can point it at LiveKit's development server: run `livekit-server --dev --node-ip 127.0.0.1` (https://docs.livekit.io/home/self-hosting/local/), then `NEXT_PUBLIC_DEMO_LIVEKIT_URL=ws://localhost:7880 npm run demo`. Everyone in the local preview joins one shared test room (real WebRTC media). The demo token route only works in demo mode with a localhost LiveKit URL. That file and `supabase/demo/seed.sql` are generated from the staff CSV and are not committed (they hold personal emails and starting passwords): set `STAFF_PASSWORD` and `ADMIN_PASSWORD` in `.env.local`, then run `node scripts/import-employees.mjs path/to/employees.csv`. Demo mode runs a real PostgreSQL (PGlite, WebAssembly) **inside the browser**, built from the same `supabase/migrations` plus `supabase/demo/*.sql`, so the actual RLS policies, triggers and RPCs decide what each user sees. `src/lib/demo/` emulates the parts of Supabase Auth, Storage and Realtime the app uses, and the admin API rules. Data stays in that browser; calls need the local LiveKit server described above; no emails are sent. It is enabled only by `NEXT_PUBLIC_DEMO_MODE=true`, which `npm run demo` sets - never set it in a deployment.
 
 ---
 
@@ -254,6 +254,8 @@ Flow: the browser calls `POST /api/calls/token` → the server checks the caller
 ---
 
 ## Deployment
+
+Before deploying the communications upgrade, follow the go-live checklist and live verification script in [docs/PRODUCTION-READINESS.md](docs/PRODUCTION-READINESS.md).
 
 Any Node.js host that runs Next.js works (Vercel, Netlify, a container).
 

@@ -628,6 +628,17 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     if (!room) return [];
     return [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
   }, [room, version]);
+  // Safety net: during a full reconnect (e.g. the media server restarted) livekit-client
+  // can add a participant without emitting an event, so re-check the roster while in a call.
+  const roster = participants.map((p) => p.identity).join(",");
+  useEffect(() => {
+    if (!inCall) return;
+    const timer = setInterval(() => {
+      const r = roomRef.current;
+      if (r && [r.localParticipant.identity, ...r.remoteParticipants.keys()].join(",") !== roster) bump();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [inCall, roster, bump]);
   const people = usePeopleById([...participants.map((p) => p.identity), ...rings.map((r) => r.user_id), ...lobby.waiting.map((l) => l.user_id)]);
   const nameOf = (p: Participant) => people.get(p.identity)?.display_name ?? (p.name || "Guest");
   const screenSharer = participants.find((p) => p.isScreenShareEnabled);

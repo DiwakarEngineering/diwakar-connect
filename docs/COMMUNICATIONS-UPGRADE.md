@@ -236,3 +236,21 @@ reminders on the live project.
 Not delivered: **recording** (needs LiveKit Egress plus a storage bucket such as Cloudflare R2, a
 recordings store, consent banner and admin policy) and **transcripts / summaries** (need a
 speech-to-text service). These are documented as configuration-dependent and not simulated.
+
+### Phase 5 — Testing and optimization
+
+No database migration. Delivered:
+
+- **Security**: Next.js 15.5.29 and Zod 4 (no known production vulnerabilities in `npm audit`);
+  guest LiveKit tokens limited to camera and microphone (no data messages or metadata) with a
+  5-minute lifetime; the LiveKit webhook removes a guest who reconnects without being admitted and
+  marks guests who leave; a signed-out access check added to `test:db` (74 checks).
+- **Responsive layout**: every app page, the call room (with participants and chat panels) and the
+  guest meeting link page checked at phone, tablet and desktop sizes; no sideways scrolling or
+  cut-off controls.
+- **Group calls**: 6 participants with live video for everyone; gallery, speaker and phone layouts.
+- **Network recovery**: a 30 s signalling outage and a media-server crash/restart both recover
+  automatically; the call room re-checks its participant list while in a call so a returning
+  participant always appears.
+- **Production readiness**: `docs/PRODUCTION-READINESS.md` scores the 15 acceptance criteria and lists
+  the go-live configuration, a live verification script and the known limits.

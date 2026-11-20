@@ -119,7 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {isDemoMode() ? (
           <div role="note" className="shrink-0 bg-brand-600 px-4 py-1 text-center text-xs font-medium text-white">
-            Local preview - data is stored only in this browser. Calls are unavailable.
+            Local preview - data is stored only in this browser.{process.env.NEXT_PUBLIC_DEMO_LIVEKIT_URL ? " Calls use the local media server." : " Calls are unavailable."}
           </div>
         ) : null}
         <TopBar />
