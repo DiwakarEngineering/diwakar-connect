@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Phone, PhoneCall, Video, WifiOff } from "lucide-react";
+import { ChevronDown, Phone, PhoneCall, Video, WifiOff } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { duration, fullDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
+import { Menu } from "@/components/ui/menu";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState, ErrorState, LoadingState, SkeletonRows } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
@@ -18,6 +19,7 @@ import { usePeopleById } from "@/components/providers/people-provider";
 import { useCallConfig } from "@/components/calls/use-call-config";
 import { useConversationTitles } from "@/components/calls/use-conversation-titles";
 import { MeetingsCalendar } from "@/components/meetings/meetings-calendar";
+import { NewMeetingMenu } from "@/components/meetings/new-meeting-menu";
 
 type CallRow = Tables<"calls"> & { participantCount: number };
 
@@ -32,6 +34,7 @@ export default function CallsPage() {
   const [startOpen, setStartOpen] = useState<"audio" | "video" | null>(null);
   const [picked, setPicked] = useState<PickedPerson[]>([]);
   const [starting, setStarting] = useState(false);
+  const [canSchedule, setCanSchedule] = useState(false);
   const supabase = getSupabaseBrowserClient();
 
   const load = useCallback(async () => {
@@ -48,6 +51,10 @@ export default function CallsPage() {
     for (const p of parts ?? []) counts.set(p.call_id, (counts.get(p.call_id) ?? new Set()).add(p.user_id));
     setError(null);
     setCalls((data ?? []).map((c) => ({ ...c, participantCount: counts.get(c.id)?.size ?? 0 })));
+  }, [supabase]);
+
+  useEffect(() => {
+    void supabase.rpc("can_schedule_meetings").then(({ data }) => setCanSchedule(!!data));
   }, [supabase]);
 
   useEffect(() => {
@@ -84,20 +91,28 @@ export default function CallsPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="hidden text-xl font-semibold text-ink-900 md:block">Calls and meetings</h1>
-            <p className="text-sm text-ink-500">Calls with colleagues and your meeting calendar. Calls are never recorded.</p>
+            <p className="text-sm text-ink-500">Your meeting calendar and call history. Calls are never recorded.</p>
           </div>
-          <div className="flex gap-2">
-            <Button disabled={!usable} onClick={() => setStartOpen("audio")}>
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              Audio call
-            </Button>
-            <Button variant="primary" disabled={!usable} onClick={() => setStartOpen("video")}>
-              <Video className="h-4 w-4" aria-hidden="true" />
-              Video call
-            </Button>
+          <div className="flex items-center gap-2">
+            <Menu
+              label="Start a call"
+              triggerClassName={buttonClass("secondary")}
+              trigger={
+                <>
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call
+                  <ChevronDown className="-mr-1 h-4 w-4 text-ink-400" aria-hidden="true" />
+                </>
+              }
+              items={[
+                { label: "Audio call", icon: <Phone className="h-4 w-4" aria-hidden="true" />, disabled: !usable, onSelect: () => setStartOpen("audio") },
+                { label: "Video call", icon: <Video className="h-4 w-4" aria-hidden="true" />, disabled: !usable, onSelect: () => setStartOpen("video") },
+              ]}
+            />
+            <NewMeetingMenu callsUsable={usable} canSchedule={canSchedule} />
           </div>
         </div>
 
@@ -123,7 +138,7 @@ export default function CallsPage() {
         ) : null}
 
         <div className="mt-6">
-          <MeetingsCalendar callsUsable={usable} />
+          <MeetingsCalendar callsUsable={usable} canSchedule={canSchedule} />
         </div>
 
         <section className="mt-8" aria-labelledby="live-heading">
@@ -136,7 +151,7 @@ export default function CallsPage() {
             ) : calls === null ? (
               <SkeletonRows rows={2} />
             ) : live.length === 0 ? (
-              <EmptyState title="No calls in progress" description="Start a call from any chat or channel, or with the buttons above." />
+              <EmptyState title="No calls in progress" description="Start a call from any chat or channel, or with Call above." />
             ) : (
               <ul className="divide-y divide-line">
                 {live.map((c) => {

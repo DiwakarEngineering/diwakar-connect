@@ -21,6 +21,11 @@ const SIZES: Record<Size, string> = {
   "icon-sm": "h-8 w-8",
 };
 
+/** The same look as <Button>, for other clickable elements (links, menu triggers). */
+export function buttonClass(variant: Variant = "secondary", size: Size = "md", className?: string) {
+  return clsx("inline-flex shrink-0 items-center justify-center rounded-lg font-medium transition-colors", VARIANTS[variant], SIZES[size], className);
+}
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
   size?: Size;

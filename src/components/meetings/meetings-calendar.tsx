@@ -2,18 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Users, Video, Zap } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Users, Video } from "lucide-react";
 import type { RpcRow } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { useSession } from "@/components/providers/session-provider";
 import { usePeopleById } from "@/components/providers/people-provider";
-import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/states";
-import { useToast } from "@/components/ui/toast";
-import { ScheduleDialog } from "./schedule-dialog";
 
 type Row = RpcRow<"list_my_meetings">;
 const DAY = 86_400_000;
@@ -34,17 +30,12 @@ export function joinable(m: Pick<Row, "starts_at" | "ends_at" | "live" | "cancel
   return m.live || (now >= new Date(m.starts_at).getTime() - 15 * 60_000 && now <= new Date(m.ends_at).getTime());
 }
 
-/** Week calendar of my meetings, with Meet now and Schedule meeting. */
-export function MeetingsCalendar({ callsUsable }: { callsUsable: boolean }) {
-  const router = useRouter();
+/** Week calendar of my meetings (new meetings are started from the page's "New meeting" menu). */
+export function MeetingsCalendar({ callsUsable, canSchedule }: { callsUsable: boolean; canSchedule: boolean }) {
   const { session } = useSession();
-  const { push } = useToast();
   const [week, setWeek] = useState(() => startOfWeek(new Date()));
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [canSchedule, setCanSchedule] = useState(false);
-  const [starting, setStarting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const supabase = getSupabaseBrowserClient();
 
@@ -60,7 +51,6 @@ export function MeetingsCalendar({ callsUsable }: { callsUsable: boolean }) {
 
   useEffect(() => {
     void load();
-    void supabase.rpc("can_schedule_meetings").then(({ data }) => setCanSchedule(!!data));
     const channel = supabase
       .channel("my-meetings")
       .on("postgres_changes", { event: "*", schema: "public", table: "meetings" }, () => void load())
@@ -83,54 +73,24 @@ export function MeetingsCalendar({ callsUsable }: { callsUsable: boolean }) {
   }, [rows, week]);
   const today = new Date().toDateString();
 
-  async function meetNow() {
-    setStarting(true);
-    const start = new Date();
-    const { data, error: e } = await supabase.rpc("create_meeting", {
-      p_title: `Meeting with ${session.profile.display_name.split(" ")[0]}`,
-      p_starts_at: start.toISOString(),
-      p_ends_at: new Date(start.getTime() + 60 * 60_000).toISOString(),
-      p_invitee_ids: [],
-    });
-    if (e || !data) {
-      setStarting(false);
-      push({ tone: "error", title: "Couldn't start a meeting", description: friendlyError(e) });
-      return;
-    }
-    const { data: m } = await supabase.from("meetings").select("conversation_id").eq("id", data).single();
-    setStarting(false);
-    if (m) router.push(`/call/${m.conversation_id}?media=video`);
-  }
-
   return (
     <section aria-labelledby="meetings-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="meetings-heading" className="text-sm font-semibold uppercase tracking-wide text-ink-500">
-          Meetings
-        </h2>
-        <div className="flex gap-2">
-          <Button disabled={!callsUsable || !canSchedule} loading={starting} onClick={() => void meetNow()}>
-            <Zap className="h-4 w-4" aria-hidden="true" />
-            Meet now
-          </Button>
-          <Button variant="primary" disabled={!canSchedule} onClick={() => setScheduleOpen(true)}>
-            <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-            Schedule meeting
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-3 overflow-hidden rounded-2xl border border-line bg-white">
+      <div className="overflow-hidden rounded-2xl border border-line bg-white">
         <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-          <CalendarDays className="h-4 w-4 text-brand-600" aria-hidden="true" />
-          <span className="text-sm font-semibold text-ink-900">
-            {week.toLocaleDateString(undefined, { day: "numeric", month: "short" })} – {new Date(week.getTime() + 6 * DAY).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+          <CalendarDays className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />
+          <h2 id="meetings-heading" className="text-sm font-semibold text-ink-900">
+            Meetings
+          </h2>
+          <span className="hidden text-sm text-ink-500 sm:inline" aria-hidden="true">·</span>
+          <span className="whitespace-nowrap text-sm text-ink-600">
+            {week.toLocaleDateString(undefined, { day: "numeric", month: "short" })} – {new Date(week.getTime() + 6 * DAY).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+            <span className="hidden sm:inline">, {new Date(week.getTime() + 6 * DAY).getFullYear()}</span>
           </span>
           <div className="ml-auto flex items-center gap-1">
             <button type="button" onClick={() => setWeek((w) => new Date(w.getTime() - 7 * DAY))} className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100" aria-label="Previous week">
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => setWeek(startOfWeek(new Date()))} className="h-8 rounded-lg px-2 text-xs font-medium text-ink-700 hover:bg-ink-100">
+            <button type="button" onClick={() => setWeek(startOfWeek(new Date()))} className="h-8 whitespace-nowrap rounded-lg px-2 text-xs font-medium text-ink-700 hover:bg-ink-100">
               This week
             </button>
             <button type="button" onClick={() => setWeek((w) => new Date(w.getTime() + 7 * DAY))} className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-600 hover:bg-ink-100" aria-label="Next week">
@@ -143,7 +103,7 @@ export function MeetingsCalendar({ callsUsable }: { callsUsable: boolean }) {
         ) : rows === null ? (
           <SkeletonRows rows={3} />
         ) : rows.length === 0 ? (
-          <EmptyState icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} title="No meetings this week" description={canSchedule ? "Schedule one, or use Meet now to start straight away." : undefined} />
+          <EmptyState icon={<CalendarDays className="h-5 w-5" aria-hidden="true" />} title="No meetings this week" description={canSchedule ? "Use New meeting to start one now or schedule one." : undefined} />
         ) : (
           <ol className="divide-y divide-line">
             {days
@@ -196,15 +156,6 @@ export function MeetingsCalendar({ callsUsable }: { callsUsable: boolean }) {
         )}
       </div>
 
-      <ScheduleDialog
-        open={scheduleOpen}
-        onClose={() => setScheduleOpen(false)}
-        onSaved={(id) => {
-          setScheduleOpen(false);
-          push({ tone: "success", title: "Meeting scheduled" });
-          router.push(`/meetings/${id}`);
-        }}
-      />
     </section>
   );
 }
