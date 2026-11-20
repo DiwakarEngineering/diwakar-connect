@@ -4,8 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { CallView } from "@/calls/call-view";
 
 export default function CallScreen() {
-  const { conversationId, media } = useLocalSearchParams<{ conversationId: string; media?: string }>();
-  const [title, setTitle] = useState("Call");
+  const { conversationId, media, title: given } = useLocalSearchParams<{ conversationId: string; media?: string; title?: string }>();
+  const [title, setTitle] = useState(given || "Call");
   useEffect(() => {
     void supabase.rpc("list_my_conversations", { p_limit: 300 }).then(({ data }) => {
       const row = (data ?? []).find((c) => c.conversation_id === conversationId);

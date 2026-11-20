@@ -68,6 +68,10 @@ function Gate() {
         <Stack.Screen name="chat/[id]" options={{ title: "" }} />
         <Stack.Screen name="new-chat" options={{ title: "New chat", presentation: Platform.OS === "ios" ? "modal" : "card" }} />
         <Stack.Screen name="call/[conversationId]" options={{ headerShown: false, presentation: "fullScreenModal", gestureEnabled: false }} />
+        <Stack.Screen name="meeting/[id]" options={{ title: "Meeting" }} />
+        <Stack.Screen name="schedule-meeting" options={{ title: "Schedule meeting", presentation: Platform.OS === "ios" ? "modal" : "card" }} />
+        <Stack.Screen name="join-meeting" options={{ title: "Join a meeting" }} />
+        <Stack.Screen name="meet/[code]" options={{ headerShown: false }} />
       </Stack.Protected>
     </Stack>
   );
