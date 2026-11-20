@@ -190,7 +190,7 @@ export default function HomePage() {
                       <li key={c.conversation_id}>
                         <Link href={`/chat/${c.conversation_id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas">
                           {c.kind === "direct" ? (
-                            <Avatar name={c.title} path={other?.avatar_path} userId={c.other_user_id ?? undefined} availability={other?.availability} showPresence size="sm" />
+                            <Avatar name={c.title} path={other?.avatar_path} userId={c.other_user_id ?? undefined} availability={other?.availability} showPresence profileCard size="sm" />
                           ) : (
                             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E7EEFF] text-[#2B4C9B]">
                               <Users className="h-4 w-4" aria-hidden="true" />

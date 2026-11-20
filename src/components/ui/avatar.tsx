@@ -1,11 +1,14 @@
 "use client";
 
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import clsx from "clsx";
 import type { Enums } from "@/lib/database.types";
 import { AVAILABILITY } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { useSignedUrl } from "@/lib/storage";
 import { usePresence } from "@/components/providers/presence-provider";
+import { ProfileCard } from "@/components/profile-card";
+import { HoverLabel, PRESENCE_KIND, PresenceIcon, type PresenceKind } from "./presence-badge";
 
 type Size = "xs" | "sm" | "md" | "lg" | "xl";
 const SIZES: Record<Size, string> = {
@@ -16,11 +19,11 @@ const SIZES: Record<Size, string> = {
   xl: "h-20 w-20 text-2xl",
 };
 const DOT: Record<Size, string> = {
-  xs: "h-2 w-2",
-  sm: "h-2.5 w-2.5",
-  md: "h-3 w-3",
-  lg: "h-3.5 w-3.5",
-  xl: "h-4 w-4",
+  xs: "h-2.5 w-2.5",
+  sm: "h-3 w-3",
+  md: "h-3.5 w-3.5",
+  lg: "h-4 w-4",
+  xl: "h-5 w-5",
 };
 
 // Warm, distinct backgrounds for initials so people are easy to tell apart.
@@ -39,21 +42,23 @@ function paletteFor(seed: string) {
   return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
-export type PresenceState = { label: string; dotClass: string; online: boolean };
+export type PresenceState = { label: string; dotClass: string; online: boolean; kind: PresenceKind };
+
+const KIND: Record<Enums<"availability">, PresenceKind> = PRESENCE_KIND;
 
 /** Combines the person's chosen availability with whether they're connected. */
 export function usePresenceState(userId: string | undefined, availability: Enums<"availability"> | undefined): PresenceState {
   const { online, activities } = usePresence();
   const isOnline = !!userId && online.has(userId);
   if (!availability || availability === "offline" || !isOnline) {
-    return { label: "Offline", dotClass: "bg-white ring-2 ring-inset ring-ink-300", online: false };
+    return { label: "Offline", dotClass: "bg-white ring-2 ring-inset ring-ink-300", online: false, kind: "offline" };
   }
   // Calls and meetings show as busy, unless the person chose Do not disturb.
   const activity = userId ? activities.get(userId) : undefined;
   if (activity && availability !== "do_not_disturb") {
-    return { label: activity === "meeting" ? "In a meeting" : "In a call", dotClass: AVAILABILITY.busy.dot, online: true };
+    return { label: activity === "meeting" ? "In a meeting" : "In a call", dotClass: AVAILABILITY.busy.dot, online: true, kind: "call" };
   }
-  return { label: AVAILABILITY[availability].label, dotClass: AVAILABILITY[availability].dot, online: true };
+  return { label: AVAILABILITY[availability].label, dotClass: AVAILABILITY[availability].dot, online: true, kind: KIND[availability] };
 }
 
 type AvatarProps = {
@@ -65,14 +70,37 @@ type AvatarProps = {
   size?: Size;
   className?: string;
   square?: boolean;
+  /** Clicking the picture opens the person's profile card. */
+  profileCard?: boolean;
 };
 
-export function Avatar({ name, path, userId, availability, showPresence = false, size = "md", className, square }: AvatarProps) {
+export function Avatar({ name, path, userId, availability, showPresence = false, size = "md", className, square, profileCard = false }: AvatarProps) {
   const url = useSignedUrl("avatars", path, 3600);
   const presence = usePresenceState(userId, availability);
+  const [card, setCard] = useState<DOMRect | null>(null);
+  const interactive = profileCard && !!userId;
+
+  const openCard = (e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) => {
+    // The picture often sits inside a link (e.g. a chat row): open the card instead of navigating.
+    e.preventDefault();
+    e.stopPropagation();
+    setCard(e.currentTarget.getBoundingClientRect());
+  };
 
   return (
-    <span className={clsx("relative inline-flex shrink-0", className)}>
+    <span
+      className={clsx("relative inline-flex shrink-0", interactive && "cursor-pointer rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500", className)}
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": `Show ${name}'s profile`,
+            "aria-haspopup": "dialog" as const,
+            onClick: openCard,
+            onKeyDown: (e: KeyboardEvent<HTMLSpanElement>) => (e.key === "Enter" || e.key === " ") && openCard(e),
+          }
+        : {})}
+    >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and not optimizable
         <img
@@ -94,13 +122,12 @@ export function Avatar({ name, path, userId, availability, showPresence = false,
         </span>
       )}
       {showPresence ? (
-        <span
-          className={clsx("absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-white", DOT[size], presence.dotClass)}
-          title={presence.label}
-        >
+        <HoverLabel label={presence.label} className={clsx("absolute -bottom-0.5 -right-0.5 rounded-full bg-white p-[1.5px]")}>
+          <PresenceIcon kind={presence.kind} className={clsx("block", DOT[size])} />
           <span className="sr-only">{presence.label}</span>
-        </span>
+        </HoverLabel>
       ) : null}
+      {card && userId ? <ProfileCard userId={userId} anchor={card} onClose={() => setCard(null)} /> : null}
     </span>
   );
 }

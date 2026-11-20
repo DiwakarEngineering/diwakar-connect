@@ -9,6 +9,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { relativeTime } from "@/lib/format";
 import { ROLE_LABEL, STATUS_LABEL } from "@/lib/constants";
+import { PresenceIcon } from "@/components/ui/presence-badge";
 import { Avatar, usePresenceState } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ function PresenceLine({ person }: { person: Person }) {
   const presence = usePresenceState(person.id, person.availability);
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-500">
-      <span className={clsx("h-2 w-2 rounded-full", presence.dotClass)} aria-hidden="true" />
+      <PresenceIcon kind={presence.kind} className="h-3 w-3" />
       {presence.online ? presence.label : `Offline${person.last_seen_at ? ` · seen ${relativeTime(person.last_seen_at)}` : ""}`}
     </span>
   );

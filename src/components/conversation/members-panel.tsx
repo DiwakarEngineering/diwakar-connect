@@ -19,7 +19,7 @@ function MemberRow({ person, me, action }: { person: Person | undefined; me: str
   if (!person) return null;
   return (
     <li className="flex items-center gap-3 px-4 py-2">
-      <Avatar name={person.display_name} path={person.avatar_path} userId={person.id} availability={person.availability} showPresence size="sm" />
+      <Avatar name={person.display_name} path={person.avatar_path} userId={person.id} availability={person.availability} showPresence profileCard size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-ink-900">
           {person.display_name}

@@ -334,7 +334,7 @@ export function TeamDetail({ teamId }: { teamId: string }) {
             }
             return (
               <li key={m.user_id} className="flex items-center gap-3 px-4 py-2.5">
-                <Avatar name={p?.display_name ?? "?"} path={p?.avatar_path} userId={m.user_id} availability={p?.availability} showPresence size="sm" />
+                <Avatar name={p?.display_name ?? "?"} path={p?.avatar_path} userId={m.user_id} availability={p?.availability} showPresence profileCard size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium text-ink-900">
                     {p?.display_name ?? "Loading..."}

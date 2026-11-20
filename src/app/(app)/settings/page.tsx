@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import clsx from "clsx";
+import { PRESENCE_KIND, PresenceIcon } from "@/components/ui/presence-badge";
 import { Camera, Check, ShieldCheck, Trash2 } from "lucide-react";
 import type { Enums, Tables, TablesUpdate } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -248,7 +249,7 @@ function AvailabilitySection() {
                 selected ? "border-brand-300 bg-brand-50" : "border-line hover:bg-canvas",
               )}
             >
-              <span className={clsx("h-3 w-3 rounded-full", meta.dot)} aria-hidden="true" />
+              <PresenceIcon kind={PRESENCE_KIND[value]} className="h-4 w-4 shrink-0" />
               <span className="flex-1">
                 <span className="block text-sm font-medium text-ink-900">{meta.label}</span>
                 <span className="block text-xs text-ink-500">{meta.description}</span>

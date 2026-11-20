@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
+import { PRESENCE_KIND, PresenceIcon } from "@/components/ui/presence-badge";
 import { Bell, Check, LogOut, MessageSquareText, Settings, ShieldCheck } from "lucide-react";
 import type { Enums } from "@/lib/database.types";
 import { AVAILABILITY, ROLE_LABEL } from "@/lib/constants";
@@ -77,7 +78,7 @@ export function ProfilePanel({ onNavigate }: { onNavigate: () => void }) {
                 selected ? "font-medium text-ink-900" : "text-ink-700",
               )}
             >
-              <span className={clsx("h-2.5 w-2.5 rounded-full", meta.dot)} aria-hidden="true" />
+              <PresenceIcon kind={PRESENCE_KIND[value]} className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1">{meta.label}</span>
               {selected ? <Check className="h-4 w-4 text-brand-600" aria-hidden="true" /> : null}
             </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 export type MenuItem =
@@ -74,7 +75,8 @@ export function Menu({ label, trigger, items, align = "end", side = "bottom", tr
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!rootRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -84,12 +86,13 @@ export function Menu({ label, trigger, items, align = "end", side = "bottom", tr
   const placed = placement !== null;
   useEffect(() => {
     if (!placed) return;
-    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not([disabled])')?.focus();
+    // preventScroll: focusing must never scroll the list the trigger sits in.
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
   }, [placed]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const itemsEls = Array.from(
-      rootRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [],
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [],
     );
     const index = itemsEls.indexOf(document.activeElement as HTMLButtonElement);
     if (e.key === "Escape") {
@@ -98,17 +101,17 @@ export function Menu({ label, trigger, items, align = "end", side = "bottom", tr
       buttonRef.current?.focus();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      itemsEls[(index + 1) % itemsEls.length]?.focus();
+      itemsEls[(index + 1) % itemsEls.length]?.focus({ preventScroll: true });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      itemsEls[(index - 1 + itemsEls.length) % itemsEls.length]?.focus();
+      itemsEls[(index - 1 + itemsEls.length) % itemsEls.length]?.focus({ preventScroll: true });
     } else if (e.key === "Tab") {
       setOpen(false);
     }
   };
 
   return (
-    <div ref={rootRef} className="relative inline-flex" onKeyDown={open ? onKeyDown : undefined}>
+    <div ref={rootRef} className="relative inline-flex" onKeyDown={open ? (e) => e.key === "Escape" && onKeyDown(e) : undefined}>
       <button
         ref={buttonRef}
         type="button"
@@ -121,9 +124,12 @@ export function Menu({ label, trigger, items, align = "end", side = "bottom", tr
       >
         {trigger}
       </button>
-      {open ? (
+      {/* Rendered in <body>: a transformed ancestor (e.g. a centred row button) would otherwise
+          become the containing block of this position: fixed menu and misplace it. */}
+      {open && typeof document !== "undefined" ? createPortal(
         <div
           ref={menuRef}
+          onKeyDown={onKeyDown}
           id={menuId}
           role="menu"
           aria-label={label}
@@ -163,7 +169,8 @@ export function Menu({ label, trigger, items, align = "end", side = "bottom", tr
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );

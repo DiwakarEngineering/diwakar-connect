@@ -194,7 +194,7 @@ export const MessageItem = memo(function MessageItem(props: MessageItemProps) {
     >
       <div className="w-9 shrink-0">
         {!grouped ? (
-          <Avatar name={senderName} path={sender?.avatar_path} userId={message.sender_id ?? undefined} size="sm" className="mt-0.5" />
+          <Avatar name={senderName} path={sender?.avatar_path} userId={message.sender_id ?? undefined} profileCard size="sm" className="mt-0.5" />
         ) : (
           <span className="invisible block pt-1 text-[10px] text-ink-400 group-hover:visible">{messageTime(message.created_at)}</span>
         )}

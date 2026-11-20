@@ -83,7 +83,7 @@ export function ConversationHeader({
         <ArrowLeft className="h-5 w-5" aria-hidden="true" />
       </Link>
       {meta.kind === "direct" && other ? (
-        <Avatar name={other.display_name} path={other.avatar_path} userId={other.id} availability={other.availability} showPresence size="md" />
+        <Avatar name={other.display_name} path={other.avatar_path} userId={other.id} availability={other.availability} showPresence profileCard size="md" />
       ) : (
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
           {meta.kind === "channel" ? (

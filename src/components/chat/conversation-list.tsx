@@ -312,7 +312,7 @@ function ConversationRow({
         )}
       >
         {row.kind === "direct" ? (
-          <Avatar name={row.title} path={other?.avatar_path} userId={row.other_user_id ?? undefined} availability={other?.availability} showPresence size="md" />
+          <Avatar name={row.title} path={other?.avatar_path} userId={row.other_user_id ?? undefined} availability={other?.availability} showPresence profileCard size="md" />
         ) : row.kind === "channel" ? (
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
             <Hash className="h-4 w-4" aria-hidden="true" />

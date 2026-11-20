@@ -271,7 +271,7 @@ function MeetingDetails({ id }: { id: string }) {
               const p = people.get(i.user_id);
               return (
                 <li key={i.user_id} className="flex items-center gap-3 py-2">
-                  <Avatar name={p?.display_name ?? "?"} path={p?.avatar_path} userId={i.user_id} availability={p?.availability} showPresence size="sm" />
+                  <Avatar name={p?.display_name ?? "?"} path={p?.avatar_path} userId={i.user_id} availability={p?.availability} showPresence profileCard size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm text-ink-900">
                     {p?.display_name ?? "Former employee"}
                     {i.user_id === meeting.organizer_id ? <span className="ml-2 text-xs text-brand-700">Organizer</span> : null}
