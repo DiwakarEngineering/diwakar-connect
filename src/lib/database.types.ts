@@ -25,6 +25,9 @@ export type Database = {
           allow_message_delete: boolean;
           max_attachment_mb: number;
           calls_enabled: boolean;
+          meeting_creation: Database["public"]["Enums"]["team_creation_policy"];
+          allow_guest_meetings: boolean;
+          recording_policy: "off" | "organizers" | "admins";
           updated_by: string | null;
         } & Timestamps;
         Insert: never;
@@ -39,6 +42,9 @@ export type Database = {
           allow_message_delete?: boolean;
           max_attachment_mb?: number;
           calls_enabled?: boolean;
+          meeting_creation?: Database["public"]["Enums"]["team_creation_policy"];
+          allow_guest_meetings?: boolean;
+          recording_policy?: "off" | "organizers" | "admins";
           updated_by?: string | null;
         };
         Relationships: [];
@@ -333,6 +339,54 @@ export type Database = {
         Update: { status?: Database["public"]["Enums"]["call_invite_status"]; responded_at?: string | null };
         Relationships: [];
       };
+      meetings: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          channel_id: string | null;
+          title: string;
+          description: string | null;
+          starts_at: string;
+          ends_at: string;
+          organizer_id: string | null;
+          code: string;
+          passcode: string;
+          allow_guests: boolean;
+          reminder_sent_at: string | null;
+          cancelled_at: string | null;
+        } & Timestamps;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      meeting_invitees: {
+        Row: {
+          meeting_id: string;
+          user_id: string;
+          response: Database["public"]["Enums"]["meeting_response"];
+          responded_at: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      meeting_lobby: {
+        Row: {
+          id: string;
+          meeting_id: string;
+          user_id: string | null;
+          guest_name: string | null;
+          secret_hash: string | null;
+          status: Database["public"]["Enums"]["lobby_status"];
+          created_at: string;
+          decided_at: string | null;
+          decided_by: string | null;
+        };
+        // Guests are added by the server (service role) only.
+        Insert: { meeting_id: string; guest_name: string; secret_hash: string; status?: Database["public"]["Enums"]["lobby_status"] };
+        Update: { status?: Database["public"]["Enums"]["lobby_status"] };
+        Relationships: [];
+      };
       notifications: {
         Row: {
           id: string;
@@ -343,6 +397,7 @@ export type Database = {
           message_id: string | null;
           team_id: string | null;
           call_id: string | null;
+          meeting_id: string | null;
           title: string;
           body: string | null;
           read_at: string | null;
@@ -409,6 +464,72 @@ export type Database = {
       };
       clear_conversation_history: { Args: { p_conversation_id: string }; Returns: string };
       mark_all_notifications_read: { Args: never; Returns: number };
+      create_meeting: {
+        Args: {
+          p_title: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_invitee_ids?: string[];
+          p_description?: string | null;
+          p_channel_id?: string | null;
+          p_allow_guests?: boolean;
+        };
+        Returns: string;
+      };
+      update_meeting: {
+        Args: {
+          p_meeting_id: string;
+          p_title: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_description?: string | null;
+          p_allow_guests?: boolean;
+          p_add_invitee_ids?: string[];
+        };
+        Returns: undefined;
+      };
+      cancel_meeting: { Args: { p_meeting_id: string }; Returns: undefined };
+      respond_to_meeting: { Args: { p_meeting_id: string; p_response: "accepted" | "tentative" | "declined" }; Returns: undefined };
+      can_schedule_meetings: { Args: never; Returns: boolean };
+      can_manage_meeting: { Args: { p_meeting: string }; Returns: boolean };
+      list_my_meetings: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          meeting_id: string;
+          conversation_id: string;
+          channel_id: string | null;
+          title: string;
+          description: string | null;
+          starts_at: string;
+          ends_at: string;
+          organizer_id: string | null;
+          code: string;
+          allow_guests: boolean;
+          cancelled_at: string | null;
+          my_response: Database["public"]["Enums"]["meeting_response"] | null;
+          invitee_count: number;
+          live: boolean;
+        }[];
+      };
+      meeting_by_code: {
+        Args: { p_code: string };
+        Returns: {
+          meeting_id: string;
+          title: string;
+          starts_at: string;
+          ends_at: string;
+          organizer_id: string | null;
+          conversation_id: string | null;
+          is_member: boolean;
+          cancelled: boolean;
+        }[];
+      };
+      request_meeting_access: { Args: { p_code: string; p_passcode: string }; Returns: string | null };
+      decide_lobby: { Args: { p_lobby_id: string; p_admit: boolean }; Returns: Database["public"]["Enums"]["lobby_status"] };
+      meeting_attendance: {
+        Args: { p_meeting_id: string };
+        Returns: { user_id: string | null; guest_name: string | null; first_joined: string | null; last_left: string | null; minutes: number | null }[];
+      };
       respond_to_call: {
         Args: { p_call_id: string; p_response: "declined" | "missed" };
         Returns: Database["public"]["Enums"]["call_invite_status"] | null;
@@ -552,6 +673,8 @@ export type Database = {
       call_status: "active" | "ended";
       call_media: "audio" | "video";
       call_invite_status: "ringing" | "accepted" | "declined" | "missed";
+      meeting_response: "pending" | "accepted" | "tentative" | "declined";
+      lobby_status: "waiting" | "admitted" | "rejected" | "left";
       team_creation_policy: "admins" | "managers" | "everyone";
       message_kind: "user" | "system";
     };

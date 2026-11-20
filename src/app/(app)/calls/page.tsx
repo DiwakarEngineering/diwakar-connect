@@ -17,6 +17,7 @@ import { useSession } from "@/components/providers/session-provider";
 import { usePeopleById } from "@/components/providers/people-provider";
 import { useCallConfig } from "@/components/calls/use-call-config";
 import { useConversationTitles } from "@/components/calls/use-conversation-titles";
+import { MeetingsCalendar } from "@/components/meetings/meetings-calendar";
 
 type CallRow = Tables<"calls"> & { participantCount: number };
 
@@ -85,8 +86,8 @@ export default function CallsPage() {
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="hidden text-xl font-semibold text-ink-900 md:block">Calls</h1>
-            <p className="text-sm text-ink-500">Audio and video calls with colleagues. Calls are never recorded.</p>
+            <h1 className="hidden text-xl font-semibold text-ink-900 md:block">Calls and meetings</h1>
+            <p className="text-sm text-ink-500">Calls with colleagues and your meeting calendar. Calls are never recorded.</p>
           </div>
           <div className="flex gap-2">
             <Button disabled={!usable} onClick={() => setStartOpen("audio")}>
@@ -121,7 +122,11 @@ export default function CallsPage() {
           </div>
         ) : null}
 
-        <section className="mt-6" aria-labelledby="live-heading">
+        <div className="mt-6">
+          <MeetingsCalendar callsUsable={usable} />
+        </div>
+
+        <section className="mt-8" aria-labelledby="live-heading">
           <h2 id="live-heading" className="text-sm font-semibold uppercase tracking-wide text-ink-500">
             In progress
           </h2>

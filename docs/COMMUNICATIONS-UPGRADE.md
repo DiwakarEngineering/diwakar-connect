@@ -197,3 +197,42 @@ whiteboard strokes both ways, undo, attendee without Clear, late-joiner sync, PN
 PDF upload and presenting, slide sync, control request → allow → remote next slide → take back,
 stop presenting. Not tested here: PowerPoint conversion (needs a Gotenberg server) and the
 organizer's "stop their presenting" (needs the real LiveKit server API).
+
+### Phase 4 — Scheduling and administration (first delivery)
+
+Migration: `supabase/migrations/20261120000100_meetings.sql` (additive; apply before deploying).
+
+Delivered:
+
+- **Meetings**: Meet now and Schedule meeting (title, date, time, duration, invitees, optional team
+  channel, agenda). Each meeting has its own chat (or runs in the channel), so calls, meeting chat,
+  slides and whiteboard work unchanged. Unique link `/meet/<meeting ID>`, 10-digit meeting ID and
+  6-character passcode, "Copy invitation". Edit and cancel (organizer or admin); invitees are
+  notified of invitations, changes and cancellations; notifications open the meeting page.
+- **Calendar**: week view on the Calls page (no new navigation item) with Join from 15 minutes
+  before the start, Live badge and responses; "Live calls and meetings" on Home.
+- **Responses**: Accept / Tentative / Decline; the organizer sees everyone's response.
+- **Lobby**: invitees join directly; other employees with the link enter the passcode and wait;
+  the organizer/admin admits or rejects from the meeting page or inside the call (participants
+  panel + "waiting in the lobby" alert). Admitted employees join the meeting chat.
+- **External guests** (only if an admin allows guest meetings and the organizer enables guests):
+  name + passcode on the meeting link, wait in the lobby, admitted guests get a media-only LiveKit
+  token for that meeting (no chat, files, whiteboard or data). Guests can be removed like anyone.
+- **Reminders**: 15 minutes before the start (pg_cron job `diwakar-meeting-reminders`, every minute;
+  if pg_cron is unavailable the migration says so and reminders are not sent automatically).
+- **Attendance**: from the call records (joined, left, minutes) plus admitted guests.
+- **Admin**: Settings → Meetings (who can schedule; allow external guests); Admin → Meetings log
+  (upcoming / past, organizer, invited, guests, status → details and attendance); create / update /
+  cancel / lobby decisions are written to the audit log.
+- Scheduled meetings don't ring everyone's phone when the call starts.
+
+Tested: database rules (`test:db`, 73 checks, 7 new); browser walk-through in demo mode
+(schedule, invitation text, edit, calendar with Join, invitee notification → meeting page →
+Accept, uninvited employee: wrong passcode rejected → lobby → organizer admits → link opens the
+meeting, admin enables guests, admin meetings log, cancel → invitee notified, Meet now). Not
+tested here: the external-guest flow (needs the server's Supabase service key) and pg_cron
+reminders on the live project.
+
+Not delivered: **recording** (needs LiveKit Egress plus a storage bucket such as Cloudflare R2, a
+recordings store, consent banner and admin policy) and **transcripts / summaries** (need a
+speech-to-text service). These are documented as configuration-dependent and not simulated.

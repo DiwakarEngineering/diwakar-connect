@@ -689,6 +689,94 @@ async function main() {
     assert(again.length === 1, "duplicate missed notification after the call ended");
   });
 
+  console.log("\nMeetings");
+
+  const soon = new Date(Date.now() + 10 * 60_000).toISOString();
+  const later = new Date(Date.now() + 70 * 60_000).toISOString();
+  const mt = (await as(alice, ({ one }) =>
+    one("select public.create_meeting('Plant review', $1, $2, $3, 'Agenda', null, false) as id", [soon, later, [bob]]),
+  )).id;
+  const mrow = await rows("select * from public.meetings where id = $1", [mt]);
+
+  await check("scheduling creates the meeting, its chat and invitations", async () => {
+    assert(mrow[0].code.length === 10 && /^[A-Z0-9]{6}$/.test(mrow[0].passcode), "code/passcode format");
+    const members = await rows("select user_id from public.conversation_members where conversation_id = $1 and left_at is null", [mrow[0].conversation_id]);
+    assert(members.length === 2, `members ${members.length}`);
+    const n = await as(bob, ({ q }) => q("select title from public.notifications where meeting_id = $1", [mt]));
+    assert(n.length === 1 && n[0].title.includes("invited you to Plant review"), "bob not invited");
+    const list = await as(bob, ({ q }) => q("select title, my_response from public.list_my_meetings(now() - interval '1 day', now() + interval '1 day')"));
+    assert(list.some((r) => r.title === "Plant review" && r.my_response === "pending"), "not in bob's calendar");
+  });
+
+  await check("outsiders can't see a meeting; the link reveals nothing to them but the title", async () => {
+    const seen = await as(mallory, ({ q }) => q("select id from public.meetings where id = $1", [mt]));
+    assert(seen.length === 0, "mallory sees the meeting");
+    const link = await as(mallory, ({ one }) => one("select is_member, conversation_id from public.meeting_by_code($1)", [mrow[0].code]));
+    assert(link.is_member === false && link.conversation_id === null, "link leaked the conversation");
+  });
+
+  await check("invitees respond; only the organizer (or admin) can change or cancel", async () => {
+    await as(bob, ({ q }) => q("select public.respond_to_meeting($1, 'tentative')", [mt]));
+    const r = await rows("select response from public.meeting_invitees where meeting_id = $1 and user_id = $2", [mt, bob]);
+    assert(r[0].response === "tentative", "response not saved");
+    await expectError(as(bob, ({ q }) => q("select public.cancel_meeting($1)", [mt])), /organizer or an administrator/);
+    await as(alice, ({ q }) => q("select public.update_meeting($1, 'Plant review v2', $2, $3, null, false, $4)", [mt, soon, later, [manager]]));
+    const inv = await rows("select user_id from public.meeting_invitees where meeting_id = $1", [mt]);
+    assert(inv.length === 3, `invitees ${inv.length}`);
+    const conv = await as(manager, ({ q }) => q("select 1 from public.conversation_members where conversation_id = $1 and user_id = $2", [mrow[0].conversation_id, manager]));
+    assert(conv.length === 1, "added invitee not in the meeting chat");
+  });
+
+  await check("uninvited employees wait in the lobby until the organizer admits them", async () => {
+    await expectError(as(mallory, ({ q }) => q("select public.request_meeting_access($1, 'WRONG1')", [mrow[0].code])), /incorrect/);
+    const lobby = (await as(mallory, ({ one }) => one("select public.request_meeting_access($1, $2) as id", [mrow[0].code, mrow[0].passcode]))).id;
+    assert(lobby, "no lobby row");
+    await expectError(as(bob, ({ q }) => q("select public.decide_lobby($1, true)", [lobby])), /organizer or an administrator/);
+    const st = await as(alice, ({ one }) => one("select public.decide_lobby($1, true) as s", [lobby]));
+    assert(st.s === "admitted", `status ${st.s}`);
+    const now = await as(mallory, ({ q }) => q("select id from public.meetings where id = $1", [mt]));
+    assert(now.length === 1, "admitted person still can't see the meeting");
+  });
+
+  await check("meeting calls don't ring; attendance comes from the call records", async () => {
+    const call = await service(({ one }) =>
+      one("insert into public.calls (conversation_id, started_by, room_name) values ($1, $2, 'meet-1') returning id", [mrow[0].conversation_id, alice]),
+    );
+    const rings = await rows("select 1 from public.call_invites where call_id = $1", [call.id]);
+    assert(rings.length === 0, "a scheduled meeting rang people");
+    await service(({ q }) => q("insert into public.call_participants (call_id, user_id) values ($1, $2), ($1, $3)", [call.id, alice, bob]));
+    const att = await as(alice, ({ q }) => q("select user_id from public.meeting_attendance($1) where user_id is not null", [mt]));
+    assert(att.length === 2, `attendance rows ${att.length}`);
+    const none = await as(sue, ({ q }) => q("select * from public.meeting_attendance($1)", [mt]));
+    assert(none.length === 0, "non-viewer saw attendance");
+    await service(({ q }) => q("update public.calls set status = 'ended', ended_at = now() where id = $1", [call.id]));
+  });
+
+  await check("reminders go out once, 15 minutes before; cancelling notifies invitees", async () => {
+    const sent = await service(({ one }) => one("select public.send_meeting_reminders() as n"));
+    assert(sent.n >= 1, "no reminder sent");
+    const again = await service(({ one }) => one("select public.send_meeting_reminders() as n"));
+    assert(again.n === 0, "reminder sent twice");
+    await expectError(as(alice, ({ q }) => q("select public.send_meeting_reminders()")), /permission denied/);
+    const rem = await as(bob, ({ q }) => q("select 1 from public.notifications where meeting_id = $1 and title like 'Starting soon%'", [mt]));
+    assert(rem.length === 1, "bob got no reminder");
+    await as(alice, ({ q }) => q("select public.cancel_meeting($1)", [mt]));
+    const c = await as(bob, ({ q }) => q("select 1 from public.notifications where meeting_id = $1 and title like 'Meeting cancelled%'", [mt]));
+    assert(c.length === 1, "bob not told about the cancellation");
+  });
+
+  await check("guest meetings need the organization setting; channel meetings need channel members", async () => {
+    await expectError(
+      as(alice, ({ q }) => q("select public.create_meeting('Guests', $1, $2, '{}', null, null, true)", [soon, later])),
+      /Guest access to meetings is turned off/,
+    );
+    const ch = (await rows("select ch.id from public.channels ch join public.teams t on t.id = ch.team_id where t.name = 'O&M Rajasthan' and ch.is_general"))[0];
+    await expectError(
+      as(manager, ({ q }) => q("select public.create_meeting('Ops sync', $1, $2, $3, null, $4, false)", [soon, later, [mallory], ch.id])),
+      /not members of that channel/,
+    );
+  });
+
   console.log("\nAdministration");
 
   await check("only admins change organization settings", async () => {

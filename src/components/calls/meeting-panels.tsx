@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { Participant } from "livekit-client";
-import { Hand, Link2, Mic, MicOff, MonitorUp, MoreHorizontal, PhoneOff, Search, UserMinus, UserPlus, Video, VideoOff, X } from "lucide-react";
+import { Hand, Link2, Mic, MicOff, MonitorUp, MoreHorizontal, PhoneOff, Search, UserCheck, UserMinus, UserPlus, UserX, Video, VideoOff, X } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Person } from "@/components/providers/people-provider";
@@ -59,6 +59,8 @@ export function ParticipantsPanel({
   onMute,
   onRemove,
   onMuteAll,
+  lobby = [],
+  onDecide,
   onClose,
 }: {
   participants: Participant[];
@@ -73,6 +75,9 @@ export function ParticipantsPanel({
   onMute: (identity: string) => void;
   onRemove: (identity: string) => void;
   onMuteAll: () => void;
+  /** People waiting to be admitted (meetings; organizer/admins only). */
+  lobby?: LobbyEntry[];
+  onDecide?: (entry: LobbyEntry, admit: boolean) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -123,6 +128,28 @@ export function ParticipantsPanel({
           </button>
         </div>
       </div>
+      {lobby.length && onDecide ? (
+        <div className="mx-3 mb-2 rounded-xl bg-brand-500/15 p-2" aria-live="polite">
+          <p className="px-1 pb-1 text-xs font-semibold text-brand-200">Waiting in the lobby ({lobby.length})</p>
+          <ul>
+            {lobby.map((l) => {
+              const label = l.guest_name ? `${l.guest_name} (guest)` : nameOf(l.user_id ?? "", "Employee");
+              return (
+                <li key={l.id} className="flex items-center gap-2 px-1 py-1.5">
+                  <Avatar name={l.guest_name ?? nameOf(l.user_id ?? "")} path={l.user_id ? people.get(l.user_id)?.avatar_path : null} userId={l.user_id ?? l.id} size="xs" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+                  <button type="button" onClick={() => onDecide(l, true)} className="flex h-7 items-center gap-1 rounded-md bg-brand-600 px-2 text-xs font-semibold" aria-label={`Admit ${label}`}>
+                    <UserCheck className="h-3.5 w-3.5" aria-hidden="true" /> Admit
+                  </button>
+                  <button type="button" onClick={() => onDecide(l, false)} className="flex h-7 w-7 items-center justify-center rounded-md text-ink-300 hover:bg-ink-800" aria-label={`Reject ${label}`}>
+                    <UserX className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between px-4 pb-1 pt-2 text-xs text-ink-300">
         <span>In the meeting ({participants.length})</span>
         {canModerate && anyUnmuted ? (
@@ -220,4 +247,57 @@ export function OutgoingRing({ rings, people, onCancel }: { rings: Ring[]; peopl
       </button>
     </div>
   );
+}
+
+export type LobbyEntry = Tables<"meeting_lobby">;
+
+/**
+ * If this call's conversation is a scheduled meeting and I can manage it,
+ * the people waiting in its lobby (live), with admit / reject.
+ */
+export function useMeetingLobby(conversationId: string) {
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [canManage, setCanManage] = useState(false);
+  const [waiting, setWaiting] = useState<LobbyEntry[]>([]);
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    void supabase
+      .from("meetings")
+      .select("id")
+      .eq("conversation_id", conversationId)
+      .is("cancelled_at", null)
+      .order("starts_at", { ascending: false })
+      .limit(1)
+      .then(async ({ data }) => {
+        const id = data?.[0]?.id ?? null;
+        setMeetingId(id);
+        if (id) setCanManage(!!(await supabase.rpc("can_manage_meeting", { p_meeting: id })).data);
+      });
+  }, [conversationId]);
+  useEffect(() => {
+    if (!meetingId || !canManage) return;
+    const supabase = getSupabaseBrowserClient();
+    const load = () =>
+      void supabase
+        .from("meeting_lobby")
+        .select("*")
+        .eq("meeting_id", meetingId)
+        .eq("status", "waiting")
+        .order("created_at")
+        .then(({ data }) => setWaiting(data ?? []));
+    load();
+    const channel = supabase
+      .channel(`call-lobby:${meetingId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meeting_lobby", filter: `meeting_id=eq.${meetingId}` }, load)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [canManage, meetingId]);
+  const decide = async (entry: LobbyEntry, admit: boolean) => {
+    const { error } = await getSupabaseBrowserClient().rpc("decide_lobby", { p_lobby_id: entry.id, p_admit: admit });
+    if (!error) setWaiting((w) => w.filter((x) => x.id !== entry.id));
+    return error;
+  };
+  return { meetingId, canManage, waiting, decide };
 }

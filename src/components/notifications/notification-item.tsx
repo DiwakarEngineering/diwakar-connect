@@ -15,6 +15,7 @@ const ICONS = {
 } as const;
 
 export function notificationHref(n: Tables<"notifications">, channelHrefs: Map<string, string>): string {
+  if (n.meeting_id) return `/meetings/${n.meeting_id}`;
   if (n.kind === "call" && n.conversation_id) return `/call/${n.conversation_id}`;
   if (n.kind === "team_invite" && n.team_id) return `/teams/${n.team_id}`;
   if (n.conversation_id) return channelHrefs.get(n.conversation_id) ?? `/chat/${n.conversation_id}`;

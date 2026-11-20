@@ -4,7 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { getPublicEnv, isDemoMode } from "@/lib/env";
 
 // Pages that render their own signed-out / expired-link states.
-const PUBLIC_PATHS = ["/sign-in", "/forgot-password", "/reset-password", "/accept-invite", "/account-disabled", "/auth/", "/setup"];
+const PUBLIC_PATHS = ["/sign-in", "/forgot-password", "/reset-password", "/accept-invite", "/account-disabled", "/auth/", "/setup", "/meet/"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p));

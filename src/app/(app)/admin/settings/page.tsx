@@ -82,6 +82,8 @@ export default function AdminSettingsPage() {
         allow_message_delete: settings.allow_message_delete,
         max_attachment_mb: settings.max_attachment_mb,
         calls_enabled: settings.calls_enabled,
+        meeting_creation: settings.meeting_creation,
+        allow_guest_meetings: settings.allow_guest_meetings,
         updated_by: session.userId,
       })
       .eq("id", true);
@@ -157,6 +159,27 @@ export default function AdminSettingsPage() {
             description="Requires a configured call provider on the server."
             checked={settings.calls_enabled}
             onChange={(v) => set("calls_enabled", v)}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-white p-5 shadow-card">
+        <h2 className="text-base font-semibold text-ink-900">Meetings</h2>
+        <div className="mt-4 grid gap-4 md:max-w-md">
+          <Field label="Who can schedule meetings">
+            <Select value={settings.meeting_creation} onChange={(e) => set("meeting_creation", e.target.value as Enums<"team_creation_policy">)}>
+              <option value="admins">Owners and admins only</option>
+              <option value="managers">Managers, admins and owners</option>
+              <option value="everyone">Every employee</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-2 divide-y divide-line">
+          <Switch
+            label="Allow external guests in meetings"
+            description="Organizers may let people without a Diwakar account join a meeting with its ID and passcode. Each guest waits in the lobby until the organizer admits them, and sees and hears the meeting only."
+            checked={settings.allow_guest_meetings}
+            onChange={(v) => set("allow_guest_meetings", v)}
           />
         </div>
       </section>

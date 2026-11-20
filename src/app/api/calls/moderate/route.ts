@@ -51,7 +51,9 @@ export const POST = handler("calls.moderate", async (request: Request) => {
   if (input.action === "remove") {
     await service.removeParticipant(call.room_name, input.userId);
     const admin = requireServiceClient();
-    await admin
+    if (input.userId.startsWith("guest:")) {
+      await admin.from("meeting_lobby").update({ status: "left" }).eq("id", input.userId.slice(6));
+    } else await admin
       .from("call_participants")
       .update({ left_at: new Date().toISOString() })
       .eq("call_id", call.id)

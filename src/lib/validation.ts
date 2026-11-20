@@ -46,14 +46,25 @@ export const callInviteSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(20),
 });
 
+/** A call participant: an employee id, or a meeting guest ("guest:<lobby id>"). */
+const PARTICIPANT_ID = /^(guest:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const callModerateSchema = z.discriminatedUnion("action", [
-  z.object({ callId: z.string().uuid(), action: z.literal("mute"), userId: z.string().uuid() }),
-  z.object({ callId: z.string().uuid(), action: z.literal("remove"), userId: z.string().uuid() }),
+  z.object({ callId: z.string().uuid(), action: z.literal("mute"), userId: z.string().regex(PARTICIPANT_ID) }),
+  z.object({ callId: z.string().uuid(), action: z.literal("remove"), userId: z.string().regex(PARTICIPANT_ID) }),
   z.object({ callId: z.string().uuid(), action: z.literal("mute_all") }),
-  z.object({ callId: z.string().uuid(), action: z.literal("stop_share"), userId: z.string().uuid() }),
+  z.object({ callId: z.string().uuid(), action: z.literal("stop_share"), userId: z.string().regex(PARTICIPANT_ID) }),
 ]);
 
 export const convertSchema = z.object({ attachmentId: z.string().uuid() });
+
+export const guestJoinSchema = z.object({
+  code: z.string().transform((v) => v.replace(/\D/g, "")).pipe(z.string().length(10)),
+  passcode: z.string().trim().toUpperCase().pipe(z.string().regex(/^[A-Z0-9]{6}$/, "Passcode is 6 letters or numbers")),
+  name: z.string().trim().min(1, "Enter your name").max(60),
+});
+
+export const guestRequestSchema = z.object({ requestId: z.string().uuid(), secret: z.string().min(20).max(100) });
 
 export const teamSchema = z.object({
   name: z.string().trim().min(1, "Team name is required").max(80),

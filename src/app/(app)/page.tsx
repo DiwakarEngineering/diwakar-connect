@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AtSign, Contact, Hash, MessageSquare, MessageSquarePlus, Phone, Users, Video } from "lucide-react";
+import { AtSign, CalendarDays, Contact, Hash, MessageSquare, MessageSquarePlus, Phone, Users, Video } from "lucide-react";
 import type { RpcRow, Tables } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
@@ -17,12 +17,14 @@ import { usePeopleById } from "@/components/providers/people-provider";
 import { NotificationItem, notificationHref } from "@/components/notifications/notification-item";
 import { callsAvailable, useCallConfig } from "@/components/calls/use-call-config";
 import { useConversationTitles } from "@/components/calls/use-conversation-titles";
+import { joinable } from "@/components/meetings/meetings-calendar";
 
 type HomeData = {
   mentions: Tables<"notifications">[];
   chats: RpcRow<"list_my_conversations">[];
   channels: RpcRow<"list_my_channels">[];
   calls: Tables<"calls">[];
+  meetings: RpcRow<"list_my_meetings">[];
 };
 
 function greeting() {
@@ -54,7 +56,7 @@ export default function HomePage() {
   const supabase = getSupabaseBrowserClient();
 
   const load = useCallback(async () => {
-    const [mentions, chats, channels, calls] = await Promise.all([
+    const [mentions, chats, channels, calls, meetings] = await Promise.all([
       supabase
         .from("notifications")
         .select("*")
@@ -66,6 +68,7 @@ export default function HomePage() {
       supabase.rpc("list_my_conversations", { p_unread_only: true, p_limit: 60 }),
       supabase.rpc("list_my_channels"),
       supabase.from("calls").select("*").eq("status", "active").order("started_at", { ascending: false }).limit(5),
+      supabase.rpc("list_my_meetings", { p_from: new Date().toISOString(), p_to: new Date(Date.now() + 7 * 86_400_000).toISOString() }),
     ]);
     const firstError = mentions.error ?? chats.error ?? channels.error ?? calls.error;
     if (firstError) {
@@ -79,6 +82,8 @@ export default function HomePage() {
       chats: (chats.data ?? []).filter((c) => c.kind !== "channel").slice(0, 6),
       channels: channels.data ?? [],
       calls: calls.data ?? [],
+      // Meetings are optional extras on Home: show what loaded.
+      meetings: (meetings.data ?? []).filter((m) => !m.cancelled_at && m.my_response !== "declined").slice(0, 4),
     });
   }, [session.userId, supabase]);
 
@@ -207,7 +212,15 @@ export default function HomePage() {
               )}
             </Card>
 
-            <Card title="Live calls" icon={<Video className="h-4 w-4" aria-hidden="true" />}>
+            <Card
+              title="Live calls and meetings"
+              icon={<Video className="h-4 w-4" aria-hidden="true" />}
+              action={
+                <Link href="/calls" className="text-xs font-semibold text-brand-700 hover:underline">
+                  Calendar
+                </Link>
+              }
+            >
               {!callsAvailable(callConfig) && callConfig.status === "ready" ? (
                 <EmptyState
                   title="Calling isn't available"
@@ -219,10 +232,30 @@ export default function HomePage() {
                 />
               ) : data === null ? (
                 <SkeletonRows rows={2} />
-              ) : data.calls.length === 0 ? (
-                <EmptyState title="No calls in progress" description="Start an audio or video call from any chat or channel. Scheduled meetings aren't supported yet." />
+              ) : data.calls.length === 0 && data.meetings.length === 0 ? (
+                <EmptyState title="Nothing live or coming up" description="Start a call from any chat, or schedule a meeting from Calls." />
               ) : (
                 <ul className="divide-y divide-line">
+                  {data.meetings
+                    .filter((m) => !data.calls.some((c) => c.conversation_id === m.conversation_id))
+                    .map((m) => (
+                      <li key={m.meeting_id} className="flex items-center gap-3 px-4 py-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                          <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <Link href={`/meetings/${m.meeting_id}`} className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink-900 hover:underline">{m.title}</span>
+                          <span className="block text-xs text-ink-500">
+                            {new Date(m.starts_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        </Link>
+                        {joinable(m) ? (
+                          <Link href={`/call/${m.conversation_id}?media=video`} className="inline-flex h-8 items-center rounded-lg bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700">
+                            Join
+                          </Link>
+                        ) : null}
+                      </li>
+                    ))}
                   {data.calls.map((call) => (
                     <li key={call.id} className="flex items-center gap-3 px-4 py-3">
                       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-success-50 text-success-700">

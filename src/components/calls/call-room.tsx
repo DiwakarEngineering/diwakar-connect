@@ -54,7 +54,7 @@ import { isDemoMode } from "@/lib/env";
 import { useCallConfig } from "./use-call-config";
 import { AudioTrack, ParticipantTile, VideoElement } from "./participant-tile";
 import { MeetingChat } from "./meeting-chat";
-import { OutgoingRing, ParticipantsPanel, handRaised, useRings } from "./meeting-panels";
+import { OutgoingRing, ParticipantsPanel, handRaised, useMeetingLobby, useRings } from "./meeting-panels";
 import { Menu } from "@/components/ui/menu";
 import { startRingback, stopRingtone } from "@/lib/sounds";
 import { ShareDrawer, isPdf } from "./share-drawer";
@@ -158,6 +158,7 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
   const [shareBusy, setShareBusy] = useState(false);
   const stoppingScreen = useRef(false);
   const rings = useRings(call?.id ?? null);
+  const lobby = useMeetingLobby(conversationId);
   const elapsed = useElapsed(phase.kind === "connected" || phase.kind === "reconnecting" ? (call?.startedAt ?? null) : null);
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -627,7 +628,7 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     if (!room) return [];
     return [room.localParticipant, ...Array.from(room.remoteParticipants.values())];
   }, [room, version]);
-  const people = usePeopleById([...participants.map((p) => p.identity), ...rings.map((r) => r.user_id)]);
+  const people = usePeopleById([...participants.map((p) => p.identity), ...rings.map((r) => r.user_id), ...lobby.waiting.map((l) => l.user_id)]);
   const nameOf = (p: Participant) => people.get(p.identity)?.display_name ?? (p.name || "Guest");
   const screenSharer = participants.find((p) => p.isScreenShareEnabled);
   // The stage: a screen share wins over slides, which win over a whiteboard.
@@ -962,6 +963,19 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
         </div>
       ) : null}
 
+      {lobby.waiting.length && !panelOpen ? (
+        <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600 px-4 py-2 text-sm text-white" role="alert">
+          <span className="truncate">
+            {lobby.waiting.length === 1
+              ? `${lobby.waiting[0]!.guest_name ? `${lobby.waiting[0]!.guest_name} (guest)` : (people.get(lobby.waiting[0]!.user_id ?? "")?.display_name ?? "Someone")} is waiting in the lobby`
+              : `${lobby.waiting.length} people are waiting in the lobby`}
+          </span>
+          <button type="button" onClick={() => { setPanelOpen(true); setChatOpen(false); setShareOpen(false); }} className="shrink-0 rounded-lg bg-white px-3 py-1 text-xs font-semibold text-brand-700">
+            View lobby
+          </button>
+        </div>
+      ) : null}
+
       {stagePresenter ? (
         <div className="mx-3 mt-2 flex items-center justify-between gap-3 rounded-xl bg-brand-600/15 px-4 py-2 text-sm text-brand-100 ring-1 ring-brand-500/30" role="status">
           <span className="flex min-w-0 items-center gap-2">
@@ -1068,6 +1082,12 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
             onMute={(id) => void moderate("mute", id)}
             onRemove={(id) => void moderate("remove", id)}
             onMuteAll={() => void moderate("mute_all")}
+            lobby={lobby.waiting}
+            onDecide={(l, admit) =>
+              void lobby.decide(l, admit).then((e) => {
+                if (e) push({ tone: "error", title: "Couldn't update the lobby", description: e.message });
+              })
+            }
             onClose={() => setPanelOpen(false)}
           />
         ) : chatOpen && meta ? (
