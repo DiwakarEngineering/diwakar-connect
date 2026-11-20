@@ -25,7 +25,20 @@ export const POST = handler("calls.moderate", async (request: Request) => {
     .maybeSingle();
   if (!call || call.status !== "active") throw new ApiError("not_found", "This call has ended.");
   const isAdmin = caller.role === "owner" || caller.role === "admin";
-  if (call.started_by !== caller.user.id && !isAdmin) {
+  // Organizer = whoever started the call, or the organizer of the scheduled meeting it belongs to.
+  let organizer = call.started_by === caller.user.id;
+  if (!organizer && !isAdmin) {
+    const { data: meeting } = await caller.supabase
+      .from("meetings")
+      .select("organizer_id")
+      .eq("conversation_id", call.conversation_id)
+      .is("cancelled_at", null)
+      .order("starts_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    organizer = meeting?.organizer_id === caller.user.id;
+  }
+  if (!organizer && !isAdmin) {
     throw new ApiError("forbidden", "Only the organizer or an administrator can do this.");
   }
   if (input.action !== "mute_all" && input.userId === caller.user.id) {
@@ -49,7 +62,8 @@ export const POST = handler("calls.moderate", async (request: Request) => {
 
   let affected = 0;
   if (input.action === "remove") {
-    await service.removeParticipant(call.room_name, input.userId);
+    // Also revoke their current token, so it can't be used to rejoin.
+    await service.removeParticipant(call.room_name, input.userId, { revokeTokenTs: BigInt(Math.floor(Date.now() / 1000)) });
     const admin = requireServiceClient();
     if (input.userId.startsWith("guest:")) {
       await admin.from("meeting_lobby").update({ status: "left" }).eq("id", input.userId.slice(6));

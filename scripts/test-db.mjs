@@ -777,6 +777,23 @@ async function main() {
     );
   });
 
+  await check("signed-out (anon) callers can't use any meeting, ringing or chat-workspace function", async () => {
+    const calls = [
+      "select public.list_my_meetings(now(), now())",
+      "select public.meeting_by_code('1234567890')",
+      "select public.request_meeting_access('1234567890', 'AAAAAA')",
+      "select public.create_meeting('x', now(), now() + interval '1 hour')",
+      "select public.respond_to_call(gen_random_uuid(), 'declined')",
+      "select public.pin_message(gen_random_uuid(), true)",
+      "select public.find_group_conversation('{}')",
+    ];
+    for (const sql of calls) {
+      await expectError(as(null, ({ q }) => q(sql), { role: "anon" }), /permission denied/);
+    }
+    const leaked = await as(null, ({ q }) => q("select count(*)::int as n from public.meetings"), { role: "anon" }).catch(() => [{ n: 0 }]);
+    assert(leaked[0].n === 0, "anon can read meetings");
+  });
+
   console.log("\nAdministration");
 
   await check("only admins change organization settings", async () => {

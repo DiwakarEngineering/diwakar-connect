@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { ApiError } from "@/lib/api";
 import type { AdminSupabase } from "@/lib/supabase/admin";
 import { getLiveKitConfig } from "@/lib/env.server";
@@ -24,11 +24,23 @@ export async function loadGuestRequest(admin: AdminSupabase, requestId: string, 
   return { req, meeting };
 }
 
-/** LiveKit token for an admitted guest: media only (no data channel, can't change attributes). */
+/**
+ * LiveKit token for an admitted guest: camera and microphone only (no screen
+ * sharing, no data channel, can't change attributes). Short-lived: it is only
+ * needed to connect; LiveKit refreshes the session for as long as they stay.
+ */
 export async function guestToken(roomName: string, requestId: string, name: string) {
   const config = getLiveKitConfig();
   if (!config) throw new ApiError("not_configured", "Calling isn't set up.");
-  const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `guest:${requestId}`, name: `${name} (guest)`, ttl: "2h" });
-  token.addGrant({ room: roomName, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: false, canUpdateOwnMetadata: false });
+  const token = new AccessToken(config.apiKey, config.apiSecret, { identity: `guest:${requestId}`, name: `${name} (guest)`, ttl: "5m" });
+  token.addGrant({
+    room: roomName,
+    roomJoin: true,
+    canPublish: true,
+    canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
+    canSubscribe: true,
+    canPublishData: false,
+    canUpdateOwnMetadata: false,
+  });
   return { token: await token.toJwt(), serverUrl: config.url };
 }

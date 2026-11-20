@@ -85,6 +85,11 @@ export const POST = handler("files.convert", async (request: Request) => {
     })
     .select("*")
     .single();
-  if (attError || !created) throw new ApiError("server_error", "The converted file couldn't be attached.");
+  if (attError || !created) {
+    // Don't leave a half-made message or an unreferenced file behind.
+    await admin.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", messageId);
+    await admin.storage.from("attachments").remove([path]);
+    throw new ApiError("server_error", attError?.message.includes("smaller than") ? attError.message : "The converted file couldn't be attached.");
+  }
   return NextResponse.json({ attachment: created });
 });

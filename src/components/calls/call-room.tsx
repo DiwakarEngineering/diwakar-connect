@@ -801,7 +801,8 @@ export function CallRoom({ conversationId, initialMedia }: { conversationId: str
     );
   const reactionsFor = (identity: string) => reactions.filter((r) => r.identity === identity);
   const local = room?.localParticipant;
-  const canModerateStage = !!call && (call.startedBy === session.userId || isAdmin);
+  // Organizer: started this call, or organizes the scheduled meeting (lobby.canManage covers admins too).
+  const canModerateStage = !!call && (call.startedBy === session.userId || isAdmin || lobby.canManage);
   const myHand = !!local && handRaised(local);
   const iPresent = !!local && stagePresenter === local;
   const othersPresenting = !!stagePresenter && stagePresenter !== local;
