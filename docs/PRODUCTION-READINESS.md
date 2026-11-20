@@ -54,7 +54,7 @@ project or services this environment cannot reach.
    - `SUPABASE_SERVICE_ROLE_KEY`: guest meetings, the webhook and admin actions.
    - Optional: `GOTENBERG_URL` and `GOTENBERG_BASIC_AUTH` (`user:password`) for Office documents.
 4. **LiveKit webhook**: in the LiveKit Cloud project, add
-   `https://connect.diwakarsolar.com/api/calls/webhook`. It is signed with the API key above. It
+   `https://diwakar-connect.engineering-aeb.workers.dev/api/calls/webhook` (your site address followed by `/api/calls/webhook`). It is signed with the API key above. It
    keeps call history accurate when people close the tab, and removes guests who are no longer
    admitted.
 5. **Admin settings** (Admin → Settings → Meetings): who can schedule meetings; whether external
