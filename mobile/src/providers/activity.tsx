@@ -22,7 +22,8 @@ type Ctx = {
   messageTick: number;
   refresh: () => void;
   incoming: IncomingCall | null;
-  answer: () => void;
+  /** Answer the ringing call; pass "audio" to answer a video call with audio only. */
+  answer: (media?: "audio" | "video") => void;
   decline: () => void;
 };
 const ActivityContext = createContext<Ctx | null>(null);
@@ -142,14 +143,17 @@ export function ActivityProvider({ userId, dnd, children }: { userId: string; dn
     };
   }, [refresh, userId]);
 
-  const answer = useCallback(() => {
-    if (!incoming) return;
-    stopRinging();
-    const call = incoming;
-    setIncoming(null);
-    void supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", call.notificationId);
-    router.push({ pathname: "/call/[conversationId]", params: { conversationId: call.conversationId, media: call.media } });
-  }, [incoming, stopRinging]);
+  const answer = useCallback(
+    (media?: "audio" | "video") => {
+      if (!incoming) return;
+      stopRinging();
+      const call = incoming;
+      setIncoming(null);
+      void supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", call.notificationId);
+      router.push({ pathname: "/call/[conversationId]", params: { conversationId: call.conversationId, media: media ?? call.media } });
+    },
+    [incoming, stopRinging],
+  );
 
   const decline = useCallback(() => {
     if (!incoming) return;
