@@ -31,7 +31,22 @@ async function loadDirectory(id: string, name: string): Promise<Directory | null
  * Profile card that opens from a person's picture: photo, presence, status
  * message, title and department, contact details, and Chat / Call buttons.
  */
-export function ProfileCard({ userId, anchor, onClose }: { userId: string; anchor: DOMRect; onClose: () => void }) {
+export function ProfileCard({
+  userId,
+  anchor,
+  onClose,
+  hover = false,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  userId: string;
+  anchor: DOMRect;
+  onClose: () => void;
+  /** Opened by hovering: don't take focus (the person may be typing). */
+  hover?: boolean;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
+}) {
   const router = useRouter();
   const { session } = useSession();
   const { push } = useToast();
@@ -76,14 +91,14 @@ export function ProfileCard({ userId, anchor, onClose }: { userId: string; ancho
     const t = setTimeout(() => document.addEventListener("mousedown", onDown), 0);
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", onClose);
-    ref.current?.focus({ preventScroll: true });
+    if (!hover) ref.current?.focus({ preventScroll: true });
     return () => {
       clearTimeout(t);
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onClose);
     };
-  }, [onClose]);
+  }, [hover, onClose]);
 
   async function open(target: "chat" | "audio" | "video") {
     setBusy(target);
@@ -112,6 +127,8 @@ export function ProfileCard({ userId, anchor, onClose }: { userId: string; ancho
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       className="fixed z-[55] w-[300px] max-w-[calc(100vw-16px)] animate-fade-in overflow-hidden rounded-2xl border border-line bg-white shadow-pop outline-none"
     >
       <div className="flex items-start gap-3 p-4">

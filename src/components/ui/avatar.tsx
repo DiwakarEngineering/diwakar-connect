@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import clsx from "clsx";
 import type { Enums } from "@/lib/database.types";
 import { AVAILABILITY } from "@/lib/constants";
@@ -77,14 +77,51 @@ type AvatarProps = {
 export function Avatar({ name, path, userId, availability, showPresence = false, size = "md", className, square, profileCard = false }: AvatarProps) {
   const url = useSignedUrl("avatars", path, 3600);
   const presence = usePresenceState(userId, availability);
-  const [card, setCard] = useState<DOMRect | null>(null);
+  const [card, setCard] = useState<{ rect: DOMRect; hover: boolean } | null>(null);
   const interactive = profileCard && !!userId;
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    openTimer.current = closeTimer.current = null;
+  };
+  useEffect(() => cancel, []);
 
   const openCard = (e: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>) => {
     // The picture often sits inside a link (e.g. a chat row): open the card instead of navigating.
     e.preventDefault();
     e.stopPropagation();
-    setCard(e.currentTarget.getBoundingClientRect());
+    cancel();
+    setCard({ rect: e.currentTarget.getBoundingClientRect(), hover: false });
+  };
+
+  // Hovering with a mouse opens the card after a short pause; leaving both the picture and
+  // the card closes it after a moment, so the pointer can travel onto the card.
+  const hoverIn = (e: PointerEvent<HTMLSpanElement>) => {
+    if (e.pointerType !== "mouse") return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    if (card || openTimer.current) return;
+    openTimer.current = setTimeout(() => {
+      openTimer.current = null;
+      setCard({ rect, hover: true });
+    }, 450);
+  };
+  const hoverOut = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    openTimer.current = null;
+    if (!card?.hover) return;
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      setCard(null);
+    }, 300);
+  };
+  const stayOpen = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
   };
 
   return (
@@ -97,6 +134,8 @@ export function Avatar({ name, path, userId, availability, showPresence = false,
             "aria-label": `Show ${name}'s profile`,
             "aria-haspopup": "dialog" as const,
             onClick: openCard,
+            onPointerEnter: hoverIn,
+            onPointerLeave: hoverOut,
             onKeyDown: (e: KeyboardEvent<HTMLSpanElement>) => (e.key === "Enter" || e.key === " ") && openCard(e),
           }
         : {})}
@@ -127,7 +166,19 @@ export function Avatar({ name, path, userId, availability, showPresence = false,
           <span className="sr-only">{presence.label}</span>
         </HoverLabel>
       ) : null}
-      {card && userId ? <ProfileCard userId={userId} anchor={card} onClose={() => setCard(null)} /> : null}
+      {card && userId ? (
+        <ProfileCard
+          userId={userId}
+          anchor={card.rect}
+          hover={card.hover}
+          onClose={() => {
+            cancel();
+            setCard(null);
+          }}
+          onPointerEnter={stayOpen}
+          onPointerLeave={hoverOut}
+        />
+      ) : null}
     </span>
   );
 }
