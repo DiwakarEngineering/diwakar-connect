@@ -79,9 +79,11 @@ export function ConversationHeader({
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-white px-3 md:px-5">
-      <Link href={backHref} className={clsx(iconBtn, "md:hidden")} aria-label="Back">
-        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-      </Link>
+      {backHref ? (
+        <Link href={backHref} className={clsx(iconBtn, "md:hidden")} aria-label="Back">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </Link>
+      ) : null}
       {meta.kind === "direct" && other ? (
         <Avatar name={other.display_name} path={other.avatar_path} userId={other.id} availability={other.availability} showPresence profileCard size="md" />
       ) : (

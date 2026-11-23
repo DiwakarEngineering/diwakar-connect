@@ -864,6 +864,39 @@ async function main() {
     assert(b?.is_favorite === false, "favourite leaked to bob");
   });
 
+  await check("chat options: mark as unread, hide and delete are per person", async () => {
+    const row = (who) => as(who, ({ one }) => one("select unread_count, is_marked_unread from public.list_my_conversations() where conversation_id = $1", [dm]));
+    // Mark as unread -> counts as unread for alice only; reading clears it.
+    await as(alice, ({ q }) => q("select public.mark_conversation_read($1)", [dm]));
+    await as(alice, ({ q }) => q("select public.mark_conversation_unread($1)", [dm]));
+    let a = await row(alice);
+    assert(a?.is_marked_unread === true && a.unread_count >= 1, "mark as unread not reflected");
+    assert((await row(bob))?.is_marked_unread === false, "unread flag leaked to bob");
+    await as(alice, ({ q }) => q("select public.mark_conversation_read($1)", [dm]));
+    a = await row(alice);
+    assert(a?.is_marked_unread === false, "reading did not clear the unread flag");
+    // Hide -> gone from alice's list (but searchable); a new message brings it back.
+    await as(alice, ({ q }) => q("select public.hide_conversation($1, true)", [dm]));
+    assert(!(await row(alice)), "hidden chat still listed");
+    assert(!!(await row(bob)), "hiding removed the chat for bob");
+    const found = await as(alice, ({ q }) => q("select 1 from public.list_my_conversations(p_search => 'Bob') where conversation_id = $1", [dm]));
+    assert(found.length === 1, "hidden chat not found by search");
+    await new Promise((r) => setTimeout(r, 5));
+    await as(bob, ({ q }) => q("insert into public.messages (conversation_id, sender_id, body) values ($1, $2, 'back again')", [dm, bob]));
+    assert(!!(await row(alice)), "new message did not bring the hidden chat back");
+    // Delete for me -> hidden and history cleared for alice; bob keeps everything.
+    await as(alice, ({ q }) => q("select public.delete_conversation_for_me($1)", [dm]));
+    assert(!(await row(alice)), "deleted chat still listed");
+    const st = await as(alice, ({ one }) => one("select cleared_at, hidden_at from public.conversation_user_state where conversation_id = $1 and user_id = auth.uid()", [dm]));
+    assert(st?.cleared_at && st?.hidden_at, "delete did not clear and hide");
+    assert(!!(await row(bob)), "delete removed the chat for bob");
+    await as(alice, ({ q }) => q("select public.hide_conversation($1, false)", [dm]));
+    // Outsiders can't use any of these.
+    await expectError(as(mallory, ({ q }) => q("select public.mark_conversation_unread($1)", [dm])), /not found/);
+    await expectError(as(mallory, ({ q }) => q("select public.hide_conversation($1, true)", [dm])), /not found/);
+    await expectError(as(mallory, ({ q }) => q("select public.delete_conversation_for_me($1)", [dm])), /not found/);
+  });
+
   await check("delivered receipts are recorded and visible only to members", async () => {
     await as(bob, ({ q }) => q("select public.mark_conversations_delivered()"));
     const r = await as(alice, ({ q }) => q("select user_id, last_delivered_at from public.get_message_receipts($1)", [dm]));

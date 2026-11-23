@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
-import { AtSign, BellOff, Hash, MessageSquarePlus, MoreHorizontal, Pin, Search, Star, Users } from "lucide-react";
+import { AtSign, Bell, BellOff, CheckCheck, EyeOff, Hash, Link2, MailWarning, MessageSquarePlus, MoreHorizontal, Pin, PinOff, Search, SquareArrowOutUpRight, Star, StarOff, Trash2, Users } from "lucide-react";
 import type { RpcRow, Tables } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { listTime } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { CountBadge } from "@/components/ui/badge";
 import { Menu } from "@/components/ui/menu";
 import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/states";
@@ -41,6 +43,9 @@ function rowHref(row: Row) {
  */
 export function ConversationList() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [toDelete, setToDelete] = useState<Row | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { session } = useSession();
   const { messageTick, version, refresh: refreshActivity } = useActivity();
   const { push } = useToast();
@@ -115,6 +120,65 @@ export function ConversationList() {
     refreshActivity();
   }
 
+  // The new options need 20261123000100_chat_options.sql; say so plainly if it isn't applied yet.
+  const optionError = (title: string, e: { message?: string; code?: string } | null) =>
+    push({
+      tone: "error",
+      title,
+      description: /function .* does not exist|could not find the function|PGRST202/i.test(`${e?.message ?? ""} ${e?.code ?? ""}`)
+        ? "This option needs the latest database update. Ask your administrator to apply it."
+        : friendlyError(e),
+    });
+
+  const after = (row: Row, leave: boolean) => {
+    // Leave the conversation if it's open (an open chat is marked read straight away).
+    if (leave && pathname === rowHref(row)) router.push("/chat");
+    void load();
+    refreshActivity();
+  };
+
+  async function markUnread(row: Row) {
+    const { error: e } = await supabase.rpc("mark_conversation_unread", { p_conversation_id: row.conversation_id });
+    if (e) return optionError("Couldn't mark as unread", e);
+    after(row, true);
+  }
+
+  async function hide(row: Row, hidden = true) {
+    const { error: e } = await supabase.rpc("hide_conversation", { p_conversation_id: row.conversation_id, p_hidden: hidden });
+    if (e) return optionError(hidden ? "Couldn't hide the chat" : "Couldn't show the chat", e);
+    after(row, hidden);
+    if (hidden)
+      push({
+        tone: "success",
+        title: "Chat hidden",
+        description: "It comes back when there's a new message. Search finds it any time.",
+        action: { label: "Undo", onClick: () => void hide(row, false) },
+      });
+  }
+
+  async function deleteChat(row: Row) {
+    setDeleting(true);
+    const { error: e } = await supabase.rpc("delete_conversation_for_me", { p_conversation_id: row.conversation_id });
+    setDeleting(false);
+    setToDelete(null);
+    if (e) return optionError("Couldn't delete the chat", e);
+    after(row, true);
+    push({ tone: "success", title: "Chat deleted for you" });
+  }
+
+  function copyLink(row: Row) {
+    const url = `${window.location.origin}${rowHref(row)}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => push({ tone: "success", title: "Link copied", description: "Only members of this chat can open it." }))
+      .catch(() => push({ tone: "error", title: "Couldn't copy the link" }));
+  }
+
+  function popOut(row: Row) {
+    const w = window.open(`/popout/chat/${row.conversation_id}`, `dc-chat-${row.conversation_id}`, "popup,width=480,height=720");
+    if (!w) push({ tone: "error", title: "Pop-up blocked", description: "Allow pop-ups for this site to open chats in their own window." });
+  }
+
   async function openMention(n: Tables<"notifications">) {
     if (!n.read_at) {
       await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
@@ -132,6 +196,11 @@ export function ConversationList() {
         people={people}
         onPref={(patch) => void setPref(row, patch)}
         onMarkRead={() => void markRead(row)}
+        onMarkUnread={() => void markUnread(row)}
+        onHide={() => void hide(row)}
+        onDelete={() => setToDelete(row)}
+        onCopyLink={() => copyLink(row)}
+        onPopOut={() => popOut(row)}
       />
     ));
 
@@ -262,6 +331,24 @@ export function ConversationList() {
           <ul aria-label="Conversations">{renderRows(visible)}</ul>
         )}
       </div>
+      <Dialog
+        open={toDelete !== null}
+        onClose={() => setToDelete(null)}
+        busy={deleting}
+        size="sm"
+        title="Delete this chat?"
+        description="The chat and its history are removed for you only; everyone else keeps their copy. If someone sends a new message, the chat comes back starting from that message."
+        footer={
+          <>
+            <Button onClick={() => setToDelete(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deleting} onClick={() => toDelete && void deleteChat(toDelete)}>
+              Delete
+            </Button>
+          </>
+        }
+      />
     </div>
   );
 }
@@ -273,6 +360,11 @@ function ConversationRow({
   people,
   onPref,
   onMarkRead,
+  onMarkUnread,
+  onHide,
+  onDelete,
+  onCopyLink,
+  onPopOut,
 }: {
   row: Row;
   active: boolean;
@@ -280,6 +372,11 @@ function ConversationRow({
   people: Map<string, Person>;
   onPref: (patch: { p_is_pinned?: boolean; p_is_muted?: boolean; p_is_favorite?: boolean }) => void;
   onMarkRead: () => void;
+  onMarkUnread: () => void;
+  onHide: () => void;
+  onDelete: () => void;
+  onCopyLink: () => void;
+  onPopOut: () => void;
 }) {
   const other = row.other_user_id ? people.get(row.other_user_id) : undefined;
   const sender = row.last_sender_id
@@ -337,7 +434,11 @@ function ConversationRow({
             {row.is_pinned ? <Pin className="h-3 w-3 shrink-0 text-ink-400" aria-label="Pinned" /> : null}
             {row.is_muted ? <BellOff className="h-3 w-3 shrink-0 text-ink-400" aria-label="Muted" /> : null}
             <span className={clsx("min-w-0 flex-1 truncate text-xs", unread ? "text-ink-800" : "text-ink-500")}>{preview}</span>
-            {unread && !row.is_muted ? <CountBadge count={row.unread_count} /> : null}
+            {unread && !row.is_muted && row.is_marked_unread && row.unread_count === 1 ? (
+              <span className="h-2.5 w-2.5 rounded-full bg-brand-600" aria-label="Marked as unread" />
+            ) : unread && !row.is_muted ? (
+              <CountBadge count={row.unread_count} />
+            ) : null}
             {unread && row.is_muted ? <span className="h-2 w-2 rounded-full bg-ink-300" aria-label="Unread" /> : null}
           </span>
         </span>
@@ -348,10 +449,34 @@ function ConversationRow({
           trigger={<MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
           triggerClassName="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100"
           items={[
-            { label: row.is_favorite ? "Remove from favorites" : "Add to favorites", onSelect: () => onPref({ p_is_favorite: !row.is_favorite }) },
-            { label: row.is_pinned ? "Unpin" : "Pin to top", onSelect: () => onPref({ p_is_pinned: !row.is_pinned }) },
-            { label: row.is_muted ? "Unmute" : "Mute", onSelect: () => onPref({ p_is_muted: !row.is_muted }) },
-            { label: "Mark as read", disabled: !unread, onSelect: onMarkRead },
+            { label: "Pop out chat", icon: <SquareArrowOutUpRight className="h-4 w-4" aria-hidden="true" />, onSelect: onPopOut },
+            { type: "separator" },
+            unread
+              ? { label: "Mark as read", icon: <CheckCheck className="h-4 w-4" aria-hidden="true" />, onSelect: onMarkRead }
+              : { label: "Mark as unread", icon: <MailWarning className="h-4 w-4" aria-hidden="true" />, onSelect: onMarkUnread },
+            {
+              label: row.is_pinned ? "Unpin" : "Pin",
+              icon: row.is_pinned ? <PinOff className="h-4 w-4" aria-hidden="true" /> : <Pin className="h-4 w-4" aria-hidden="true" />,
+              onSelect: () => onPref({ p_is_pinned: !row.is_pinned }),
+            },
+            {
+              label: row.is_muted ? "Unmute" : "Mute",
+              icon: row.is_muted ? <Bell className="h-4 w-4" aria-hidden="true" /> : <BellOff className="h-4 w-4" aria-hidden="true" />,
+              onSelect: () => onPref({ p_is_muted: !row.is_muted }),
+            },
+            {
+              label: row.is_favorite ? "Remove from favorites" : "Add to favorites",
+              icon: row.is_favorite ? <StarOff className="h-4 w-4" aria-hidden="true" /> : <Star className="h-4 w-4" aria-hidden="true" />,
+              onSelect: () => onPref({ p_is_favorite: !row.is_favorite }),
+            },
+            { label: "Get link to chat", icon: <Link2 className="h-4 w-4" aria-hidden="true" />, onSelect: onCopyLink },
+            ...(row.kind !== "channel"
+              ? ([
+                  { label: "Hide", icon: <EyeOff className="h-4 w-4" aria-hidden="true" />, onSelect: onHide },
+                  { type: "separator" },
+                  { label: "Delete chat", icon: <Trash2 className="h-4 w-4" aria-hidden="true" />, danger: true, onSelect: onDelete },
+                ] as const)
+              : []),
           ]}
         />
       </div>

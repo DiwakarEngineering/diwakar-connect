@@ -46,6 +46,7 @@ project or services this environment cannot reach.
    1. `supabase/migrations/20261117000100_chat_workspace.sql`
    2. `supabase/migrations/20261119000100_call_ringing.sql`
    3. `supabase/migrations/20261120000100_meetings.sql`
+   4. `supabase/migrations/20261123000100_chat_options.sql` (chat list: mark as unread, hide, delete chat for me)
 2. **pg_cron** (meeting reminders): enable it under Database → Extensions *before* running the
    meetings migration. If it was enabled afterwards, run the migration's final `do $$ … $$` block
    again to schedule the job `diwakar-meeting-reminders`.

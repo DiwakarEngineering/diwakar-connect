@@ -453,6 +453,9 @@ export type Database = {
       add_conversation_members: { Args: { p_conversation_id: string; p_member_ids: string[] }; Returns: number };
       remove_conversation_member: { Args: { p_conversation_id: string; p_user_id: string }; Returns: undefined };
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
+      mark_conversation_unread: { Args: { p_conversation_id: string }; Returns: undefined };
+      hide_conversation: { Args: { p_conversation_id: string; p_hidden?: boolean }; Returns: undefined };
+      delete_conversation_for_me: { Args: { p_conversation_id: string }; Returns: undefined };
       set_conversation_preferences: {
         Args: {
           p_conversation_id: string;
@@ -564,6 +567,8 @@ export type Database = {
           team_id: string | null;
           team_name: string | null;
           channel_id: string | null;
+          /** Added by 20261123000100_chat_options.sql (absent before it is applied). */
+          is_marked_unread?: boolean;
         }[];
       };
       list_teams: {

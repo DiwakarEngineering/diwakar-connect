@@ -95,6 +95,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (pathname.startsWith("/call/")) {
     return <div className="min-h-dvh bg-ink-950">{children}</div>;
   }
+  // "Pop out chat": just the conversation, in its own small window.
+  if (pathname.startsWith("/popout/")) {
+    return <div className="h-dvh overflow-hidden bg-white">{children}</div>;
+  }
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
