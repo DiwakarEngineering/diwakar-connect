@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { MessagesSquare, ShieldCheck, Video } from "lucide-react";
-import { BrandLogo, BrandMark } from "@/components/brand-mark";
+import { BrandLockup, BrandMark } from "@/components/brand-mark";
 import { COMPANY_NAME } from "@/lib/constants";
 
 /** Two-panel layout for sign-in and account flows; collapses to one column on mobile. */
@@ -11,8 +11,7 @@ export function AuthFrame({ title, subtitle, children }: { title: string; subtit
         <div aria-hidden="true" className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-200/40 blur-3xl" />
         <div aria-hidden="true" className="absolute -bottom-32 -left-16 h-96 w-96 rounded-full bg-brand-100/60 blur-3xl" />
         <div className="relative">
-          <BrandLogo className="h-14" />
-          <p className="mt-3 text-sm font-semibold text-ink-700">Diwakar Connect</p>
+          <BrandLockup />
         </div>
         <div className="relative max-w-md">
           <h2 className="text-3xl font-semibold leading-tight text-ink-900">

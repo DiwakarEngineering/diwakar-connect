@@ -3,18 +3,20 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/field";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { email as emailSchema, safeNextPath } from "@/lib/validation";
+import { saveRememberChoice } from "@/lib/remember-me";
 
 export function SignInForm({ notice, next }: { notice: string | null; next: string | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,6 +39,7 @@ export function SignInForm({ notice, next }: { notice: string | null; next: stri
       setError(friendlyError(signInError, "Sign-in failed. Please try again."));
       return;
     }
+    saveRememberChoice(remember);
     // The app layout re-checks employment status on the server.
     router.replace(safeNextPath(next));
     router.refresh();
@@ -50,27 +53,35 @@ export function SignInForm({ notice, next }: { notice: string | null; next: stri
         </div>
       ) : null}
       <FormError message={error} />
-      <Field label="Work email" error={fieldErrors.email}>
-        <Input
-          type="email"
-          autoComplete="username"
-          inputMode="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@diwakarsolar.com"
-          required
-        />
+      <Field label="Email" error={fieldErrors.email}>
+        {(controlProps) => (
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
+            <Input
+              {...controlProps}
+              type="email"
+              autoComplete="username"
+              inputMode="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@diwakarsolar.com"
+              className="h-11 pl-10"
+              required
+            />
+          </div>
+        )}
       </Field>
       <Field label="Password" error={fieldErrors.password}>
         {(controlProps) => (
           <div className="relative">
+            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden="true" />
             <Input
               {...controlProps}
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pr-10"
+              className="h-11 pl-10 pr-10"
               required
             />
             <button
@@ -85,13 +96,23 @@ export function SignInForm({ notice, next }: { notice: string | null; next: stri
           </div>
         )}
       </Field>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-700">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="h-4 w-4 rounded border-line accent-brand-600"
+          />
+          Remember me
+        </label>
         <Link href="/forgot-password" className="text-sm font-medium text-brand-700 hover:underline">
           Forgot password?
         </Link>
       </div>
       <Button type="submit" variant="primary" size="lg" className="w-full" loading={loading}>
         Sign in
+        {loading ? null : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
       </Button>
       <p className="text-center text-xs text-ink-500">
         Accounts are created by your administrator. Need access? Ask your HR or IT team for an invitation.

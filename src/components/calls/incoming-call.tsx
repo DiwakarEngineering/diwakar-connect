@@ -174,7 +174,7 @@ function RingCard({
 
       <div className="relative flex flex-col items-center px-5 pb-5 pt-4 text-center">
         <p className="flex items-center gap-2 text-sm font-medium text-white/90">
-          <BrandMark onDark className="h-6 w-6" />
+          <BrandMark className="h-5 w-5" />
           <span id="incoming-call-title" className="min-w-0 truncate">
             <span className="font-semibold text-white">{name}</span> is calling you
           </span>

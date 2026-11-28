@@ -1,48 +1,52 @@
 import clsx from "clsx";
 import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
 
-/*
- * Official Diwakar logo (supplied as DIWAKAR-Logo-D-Icon-1080.pdf): the "D" made of solar-panel
- * cells with the sun inside, and the full lockup with the wordmark and "Powering Bharat's Future".
- * Shapes and colours are taken directly from the artwork - don't redraw or recolour them.
+/**
+ * Original Diwakar Connect mark: a rising sun inside a speech bubble.
+ * Decorative unless a title is given.
  */
-
-/** The "D" icon. Decorative unless a title is given. On dark backgrounds pass onDark (white tile). */
-export function BrandMark({ className, title, onDark = false }: { className?: string; title?: string; onDark?: boolean }) {
-  const svg = (
+export function BrandMark({ className, title }: { className?: string; title?: string }) {
+  return (
     <svg
-      viewBox="82 349 112 112"
-      className={clsx(onDark ? "h-full w-full" : clsx("h-9 w-9", className))}
+      viewBox="0 0 40 40"
+      className={clsx("h-9 w-9", className)}
       role={title ? "img" : undefined}
       aria-hidden={title ? undefined : true}
       aria-label={title}
     >
-      <path d="M 82.68 349.98 L 107.15 349.98 L 107.15 374.45 L 82.68 374.45 Z M 82.68 349.98" fill="#04145A" />
-      <path d="M 82.68 378.50 L 107.15 378.50 L 107.15 402.97 L 82.68 402.97 Z M 82.68 378.50" fill="#04145A" />
-      <path d="M 82.68 407.02 L 107.15 407.02 L 107.15 431.49 L 82.68 431.49 Z M 82.68 407.02" fill="#04145A" />
-      <path d="M 82.68 435.54 L 107.15 435.54 L 107.15 460.01 L 82.68 460.01 Z M 82.68 435.54" fill="#04145A" />
-      <path d="M 111.20 349.98 L 135.67 349.98 L 135.67 374.45 L 111.20 374.45 Z M 111.20 349.98" fill="#04145A" />
-      <path d="M 111.20 435.54 L 135.67 435.54 L 135.67 460.01 L 111.20 460.01 Z M 111.20 435.54" fill="#04145A" />
-      <path d="M 139.72 350.02 C 152.90 350.51 165.47 355.71 175.14 364.69 L 157.81 382.01 C 152.76 377.60 146.41 374.96 139.72 374.52 Z M 139.72 350.02" fill="#04145A" />
-      <path d="M 178.00 367.55 C 186.98 377.22 192.18 389.79 192.67 402.97 L 168.17 402.97 C 167.73 396.28 165.09 389.92 160.68 384.88 Z M 178.00 367.55" fill="#04145A" />
-      <path d="M 192.67 407.02 C 192.18 420.20 186.98 432.77 178.00 442.44 L 160.68 425.11 C 165.09 420.07 167.73 413.71 168.17 407.02 Z M 192.67 407.02" fill="#04145A" />
-      <path d="M 175.14 445.30 C 165.47 454.28 152.90 459.48 139.72 459.97 L 139.72 435.47 C 146.41 435.03 152.76 432.39 157.81 427.98 Z M 175.14 445.30" fill="#04145A" />
-      <path d="M 149.92 405 C 149.92 411.75 144.45 417.23 137.69 417.23 C 130.94 417.23 125.46 411.75 125.46 405 C 125.46 398.24 130.94 392.76 137.69 392.76 C 144.45 392.76 149.92 398.24 149.92 405 Z M 149.92 405" fill="#F47E20" />
-      <path d="M 154.65 405 L 160.05 405" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 149.69 393.00 L 153.50 389.19" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 137.69 388.04 L 137.69 382.64" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 125.70 393.00 L 121.89 389.19" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 120.74 405 L 115.34 405" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 125.70 416.99 L 121.89 420.80" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 137.69 421.95 L 137.69 427.35" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
-      <path d="M 149.69 416.99 L 153.50 420.80" fill="none" stroke="#F47E20" strokeWidth={2.03} strokeLinecap="round" />
+      <path d="M8 4h24a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H17l-7.2 5.6c-.7.5-1.8 0-1.8-.9V32a6 6 0 0 1-6-6V10a6 6 0 0 1 6-6Z" fill="#F06A1A" />
+      <path d="M12 25a8 8 0 0 1 16 0Z" fill="#fff" />
+      <g stroke="#fff" strokeWidth="2.2" strokeLinecap="round">
+        <path d="M20 10.5v2.6" />
+        <path d="M11.2 14.2l1.9 1.8" />
+        <path d="M28.8 14.2l-1.9 1.8" />
+        <path d="M8.5 22h2.2" />
+        <path d="M29.3 22h2.2" />
+      </g>
+      <path d="M9.5 27.5h21" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" opacity=".9" />
     </svg>
   );
-  if (!onDark) return svg;
-  return <span className={clsx("inline-flex shrink-0 items-center justify-center rounded-[22%] bg-white p-[12%]", "h-9 w-9", className)}>{svg}</span>;
 }
 
-/** Full Diwakar logo: "D" icon, DIWAKAR wordmark and the tagline. */
+export function BrandLockup({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <BrandMark />
+      {!compact ? (
+        <div className="leading-tight">
+          <div className="text-[15px] font-semibold text-ink-900">{APP_NAME}</div>
+          <div className="text-xs text-ink-500">{COMPANY_NAME}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Official Diwakar logo (from DIWAKAR-Logo-D-Icon-1080.pdf): the solar-panel "D", the DIWAKAR
+ * wordmark and "Powering Bharat's Future". Used on the sign-in page only; shapes and colours
+ * come straight from the artwork.
+ */
 export function BrandLogo({ className, title = "Diwakar - Powering Bharat's Future" }: { className?: string; title?: string }) {
   return (
     <svg viewBox="80 346 650 117" className={clsx("h-12 w-auto", className)} role="img" aria-label={title}>
@@ -95,20 +99,5 @@ export function BrandLogo({ className, title = "Diwakar - Powering Bharat's Futu
       <path d="M 695.78 450.44 L 695.78 443.65 L 698.84 443.65 C 701.70 443.65 703.26 444.49 703.26 446.88 C 703.26 449.26 701.70 450.44 698.84 450.44 Z M 703.49 460.01 L 706.08 460.01 L 701.45 452.03 C 703.91 451.43 705.55 449.74 705.55 446.88 C 705.55 443.10 702.89 441.78 699.19 441.78 L 693.5 441.78 L 693.5 460.01 L 695.78 460.01 L 695.78 452.28 L 699.07 452.28 Z M 703.49 460.01" fill="#B5612A" />
       <path d="M 716.54 460.01 L 727.31 460.01 L 727.31 458.04 L 718.83 458.04 L 718.83 451.41 L 725.74 451.41 L 725.74 449.44 L 718.83 449.44 L 718.83 443.72 L 727.03 443.72 L 727.03 441.78 L 716.54 441.78 Z M 716.54 460.01" fill="#B5612A" />
     </svg>
-  );
-}
-
-/** The app's name beside the "D" icon (sidebar, sign-in). */
-export function BrandLockup({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <BrandMark />
-      {!compact ? (
-        <div className="leading-tight">
-          <div className="text-[15px] font-semibold text-ink-900">{APP_NAME}</div>
-          <div className="text-xs text-ink-500">{COMPANY_NAME}</div>
-        </div>
-      ) : null}
-    </div>
   );
 }
