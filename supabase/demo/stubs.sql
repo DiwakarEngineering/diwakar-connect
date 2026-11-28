@@ -19,6 +19,7 @@ create table auth.users (
   id uuid primary key default gen_random_uuid(),
   email text,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
+  invited_at timestamptz,
   last_sign_in_at timestamptz,
   banned_until timestamptz,
   created_at timestamptz not null default now()

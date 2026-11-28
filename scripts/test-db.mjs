@@ -66,12 +66,15 @@ async function as(userId, fn, extra = {}) {
 const service = (fn) => as(null, fn, { role: "service_role" });
 const rows = async (sql, params) => (await db.query(sql, params)).rows;
 
-async function createAuthUser(email, displayName) {
+// By default the person was invited by an admin (Supabase sets invited_at).
+// { invited: false } models someone who signed up on their own.
+async function createAuthUser(email, displayName, { invited = true } = {}) {
   const id = randomUUID();
-  await db.query("insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)", [
+  await db.query("insert into auth.users (id, email, raw_user_meta_data, invited_at) values ($1, $2, $3, $4)", [
     id,
     email,
     JSON.stringify({ display_name: displayName }),
+    invited ? new Date().toISOString() : null,
   ]);
   return id;
 }
@@ -135,6 +138,14 @@ async function main() {
   await check("invited person activates their own account", async () => {
     const r = await as(carl, ({ one }) => one("select public.activate_my_account() as s"));
     assert(r.s === "active", `got ${r.s}`);
+  });
+
+  await check("self-registered (never invited) person cannot activate themselves", async () => {
+    const stranger = await createAuthUser("stranger@example.test", "Self Signup", { invited: false });
+    const r = await as(stranger, ({ one }) => one("select public.activate_my_account() as s"));
+    assert(r.s === "invited", `got ${r.s}`);
+    const seen = await as(stranger, ({ q }) => q("select id from public.profiles"));
+    assert(seen.length === 1, `stranger could see ${seen.length} profiles`);
   });
 
   await service(({ q }) => q("update public.profiles set employment_status = 'suspended' where id = $1", [sue]));

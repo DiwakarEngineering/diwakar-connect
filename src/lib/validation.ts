@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// The Content-Security-Policy forbids eval. Zod would otherwise probe for it
+// (new Function) and every page would log a harmless CSP violation.
+z.config({ jitless: true });
+
 export const email = z.string().trim().toLowerCase().email("Enter a valid email address").max(254);
 
 // Supabase enforces its own minimum too; this keeps the UX consistent.
@@ -88,8 +92,22 @@ export const domainList = z
   )
   .pipe(z.array(z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/, "Enter domains like diwakarsolar.com")).max(20));
 
-/** Only allow same-site relative redirects after sign-in. */
+/**
+ * Only allow same-site relative redirects after sign-in.
+ * Browsers silently drop tabs/newlines from URLs, so "/\t/evil.com" would
+ * become "//evil.com" (another site). Reject control characters and
+ * backslashes outright, then resolve the path and require it to stay on
+ * this origin.
+ */
 export function safeNextPath(next: string | null | undefined, fallback = "/"): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
-  return next;
+  if (!next || /[\u0000-\u001F\u007F\\]/.test(next) || !next.startsWith("/") || next.startsWith("//")) return fallback;
+  try {
+    const base = "https://same-origin.invalid";
+    const url = new URL(next, base);
+    // "/..//evil.com" normalizes to "//evil.com", which a browser treats as another site.
+    if (url.origin !== base || url.pathname.startsWith("//")) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
 }

@@ -1,0 +1,7 @@
+# Security headers for static files served directly by Cloudflare
+# (pages and API responses get theirs from next.config.ts and src/middleware.ts).
+/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY

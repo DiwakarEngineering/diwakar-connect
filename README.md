@@ -257,6 +257,8 @@ Flow: the browser calls `POST /api/calls/token` → the server checks the caller
 
 Before deploying the communications upgrade, follow the go-live checklist and live verification script in [docs/PRODUCTION-READINESS.md](docs/PRODUCTION-READINESS.md).
 
+Security settings that must be made by hand (turn off public sign-up in Supabase Auth, apply the invitation-only activation migration, rotate keys) and the `CSP_MODE` kill switch for the Content-Security-Policy are in [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md).
+
 Any Node.js host that runs Next.js works (Vercel, Netlify, a container).
 
 1. Set all environment variables in the host **before building** (`NEXT_PUBLIC_*` values are compiled into the client bundle).

@@ -65,11 +65,23 @@ export function handler<Args extends unknown[]>(
   };
 }
 
+/**
+ * Largest JSON body any endpoint accepts. The biggest legitimate request (an
+ * invitation or a call invite with a list of people) is a few kilobytes. The
+ * cap also stops oversized payloads from exhausting memory during validation.
+ */
+const MAX_JSON_BYTES = 64 * 1024;
+
 export async function parseJson<T>(request: Request, schema: ZodSchema<T>): Promise<T> {
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > MAX_JSON_BYTES) throw new ApiError("invalid_request", "Request body is too large.");
   let raw: unknown;
   try {
-    raw = await request.json();
-  } catch {
+    const text = await request.text();
+    if (text.length > MAX_JSON_BYTES) throw new ApiError("invalid_request", "Request body is too large.");
+    raw = JSON.parse(text);
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
     throw new ApiError("invalid_request", "Request body must be JSON.");
   }
   const result = schema.safeParse(raw);
@@ -82,6 +94,11 @@ export async function parseJson<T>(request: Request, schema: ZodSchema<T>): Prom
 
 /** Same-origin check for state-changing requests (defense in depth beyond SameSite cookies). */
 export function assertSameOrigin(request: Request) {
+  // Browsers mark requests started by another website; such requests never
+  // legitimately reach this API (CSRF defense, works even without an Origin header).
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    throw new ApiError("forbidden", "Cross-origin request blocked.");
+  }
   const origin = request.headers.get("origin");
   if (!origin) return;
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
