@@ -1,10 +1,21 @@
 import type { ReactNode } from "react";
 import { MessagesSquare, ShieldCheck, Video } from "lucide-react";
-import { BrandLockup, BrandMark } from "@/components/brand-mark";
+import { BrandLockup, BrandLogo, BrandMark } from "@/components/brand-mark";
 import { COMPANY_NAME } from "@/lib/constants";
 
 /** Two-panel layout for sign-in and account flows; collapses to one column on mobile. */
-export function AuthFrame({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
+export function AuthFrame({
+  title,
+  subtitle,
+  logo = false,
+  children,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  /** Show the official Diwakar logo above the form (sign-in page). */
+  logo?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1fr_1.1fr]">
       <aside className="relative hidden overflow-hidden bg-gradient-to-br from-[#FFF4EA] via-[#FFF9F3] to-white lg:flex lg:flex-col lg:justify-between lg:p-12">
@@ -46,10 +57,14 @@ export function AuthFrame({ title, subtitle, children }: { title: string; subtit
 
       <main id="main" className="flex items-center justify-center bg-white px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <BrandMark />
-            <span className="text-base font-semibold text-ink-900">Diwakar Connect</span>
-          </div>
+          {logo ? (
+            <BrandLogo className="mb-8 h-12 w-auto sm:h-14" />
+          ) : (
+            <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+              <BrandMark />
+              <span className="text-base font-semibold text-ink-900">Diwakar Connect</span>
+            </div>
+          )}
           <h1 className="text-2xl font-semibold text-ink-900">{title}</h1>
           {subtitle ? <p className="mt-1.5 text-sm text-ink-500">{subtitle}</p> : null}
           <div className="mt-8">{children}</div>
