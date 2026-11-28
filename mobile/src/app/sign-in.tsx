@@ -37,9 +37,14 @@ export default function SignIn() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={st.scroll} keyboardShouldPersistTaps="handled">
           <View style={st.brand}>
-            <Image source={require("../../assets/images/icon.png")} style={st.logo} contentFit="contain" accessibilityIgnoresInvertColors />
+            <Image
+              source={require("../../assets/images/logo-full.png")}
+              style={st.logo}
+              contentFit="contain"
+              accessibilityLabel="Diwakar - Powering Bharat's Future"
+              accessibilityIgnoresInvertColors
+            />
             <Text style={st.appName}>Diwakar Connect</Text>
-            <Text style={st.org}>Diwakar Solar</Text>
           </View>
           <View style={st.card}>
             <Text style={st.title} accessibilityRole="header">
@@ -100,9 +105,8 @@ export default function SignIn() {
 const st = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: "center", padding: 20, gap: 20 },
   brand: { alignItems: "center", gap: 4 },
-  logo: { width: 72, height: 72, borderRadius: 18 },
+  logo: { width: 260, height: Math.round((260 * 193) / 1120), maxWidth: "90%" },
   appName: { fontSize: 22, fontWeight: "700", color: colors.ink900, marginTop: 6 },
-  org: { fontSize: 14, color: colors.ink500 },
   card: { backgroundColor: colors.white, borderRadius: 20, borderWidth: 1, borderColor: colors.line, padding: 20, gap: 14 },
   title: { fontSize: 20, fontWeight: "700", color: colors.ink900 },
   subtitle: { fontSize: 14, color: colors.ink500, marginTop: -8 },
